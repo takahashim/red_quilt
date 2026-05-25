@@ -1,0 +1,1230 @@
+# Markdown Processor: Arena AST 設計案
+
+## 目的
+
+RubyでMarkdown processorを実装するにあたり、通常のRubyオブジェクトツリーとしてASTを構築すると、ノード数・文字列断片・Tokenオブジェクトが大量に生成され、Markly/cmark系と比べて速度・メモリ使用量で大きく不利になりやすい。
+
+そのため、本設計では以下を目標とする。
+
+- 内部ASTはRubyオブジェクトツリーではなく、数値IDベースのArena構造で保持する
+- Textノードは文字列を複製せず、元ソース文字列へのspanとして保持する
+- 内部処理ではNodeオブジェクトを作らず、`node_id` の整数だけを取り回す
+- 外部APIでは必要に応じて `NodeRef` wrapper を返す
+- `parse` と `render_html` の経路を分け、HTML生成だけなら完全AST構築を避けられる余地を残す
+- 将来的にLexerKit backendやnative storageへ差し替え可能にする
+
+## 基本方針
+
+処理系は大きく以下の層に分ける。
+
+```text
+Source
+  ↓
+Line-oriented BlockParser
+  ↓
+Arena AST with raw inline spans
+  ↓
+InlinePass
+  ↓
+InlineLexer / InlineParser
+  ↓
+Arena AST with inline nodes
+  ↓
+Renderer / Formatter / Transformer
+```
+
+ただし、HTML生成だけを高速に行う場合は、将来的に以下の経路も用意する。
+
+```text
+Source
+  ↓
+BlockParser events
+  ↓
+InlineParser events
+  ↓
+HTMLRenderer
+```
+
+つまり、APIとしては次の2系統を持つ。
+
+```ruby
+doc = Markdown.parse(source)        # Arena ASTを構築する
+html = Markdown.render_html(source) # 速度重視。AST構築を省略できる余地を持つ
+```
+
+## 全体構成
+
+```text
+lib/markdown/
+  source.rb
+  source_map.rb
+
+  arena.rb
+  node_ref.rb
+  node_type.rb
+
+  block_parser.rb
+  inline_pass.rb
+  inline_scanner.rb
+  inline_parser.rb
+
+  renderer/html.rb
+  formatter.rb
+  transformer.rb
+
+  config.rb
+```
+
+将来的にLexerKitを使う場合は、inline scannerを差し替える。
+
+```text
+lib/markdown/inline_scanner/ruby.rb
+lib/markdown/inline_scanner/lexer_kit.rb
+```
+
+## Arena AST
+
+### コンセプト
+
+通常のASTは次のようにノードごとにRubyオブジェクトを作る。
+
+```ruby
+Document.new([
+  Heading.new(level: 1, children: [
+    Text.new("Hello")
+  ]),
+  Paragraph.new(children: [
+    Text.new("World")
+  ])
+])
+```
+
+本設計では、内部的にはこうしたオブジェクトツリーを作らない。
+
+代わりに、すべてのノードを `node_id` で識別し、ノード情報を複数の配列に分けて保持する。
+
+```text
+node_id = 0
+type[0] = DOCUMENT
+first_child[0] = 1
+next_sibling[0] = -1
+
+node_id = 1
+type[1] = HEADING
+level[1] = 1
+first_child[1] = 2
+next_sibling[1] = 3
+
+node_id = 2
+type[2] = TEXT
+source_start[2] = 2
+source_len[2] = 5
+
+node_id = 3
+type[3] = PARAGRAPH
+...
+```
+
+### Arenaの基本構造
+
+初期実装ではRubyの配列を使う。
+
+```ruby
+module Markdown
+  class Arena
+    attr_reader :source
+
+    def initialize(source)
+      @source = source
+
+      @type = []
+
+      @parent = []
+      @first_child = []
+      @last_child = []
+      @next_sibling = []
+      @prev_sibling = []
+
+      @source_start = []
+      @source_len = []
+
+      @int1 = []
+      @int2 = []
+      @int3 = []
+
+      @str1 = []
+      @str2 = []
+    end
+
+    def add_node(type, source_start: -1, source_len: 0, int1: 0, int2: 0, int3: 0, str1: nil, str2: nil)
+      id = @type.length
+
+      @type[id] = type
+
+      @parent[id] = -1
+      @first_child[id] = -1
+      @last_child[id] = -1
+      @next_sibling[id] = -1
+      @prev_sibling[id] = -1
+
+      @source_start[id] = source_start
+      @source_len[id] = source_len
+
+      @int1[id] = int1
+      @int2[id] = int2
+      @int3[id] = int3
+
+      @str1[id] = str1
+      @str2[id] = str2
+
+      id
+    end
+
+    def append_child(parent_id, child_id)
+      @parent[child_id] = parent_id
+
+      if @first_child[parent_id] == -1
+        @first_child[parent_id] = child_id
+        @last_child[parent_id] = child_id
+      else
+        last = @last_child[parent_id]
+        @next_sibling[last] = child_id
+        @prev_sibling[child_id] = last
+        @last_child[parent_id] = child_id
+      end
+
+      child_id
+    end
+  end
+end
+```
+
+### なぜparallel arrayにするか
+
+ノードごとにHashやStructを作ると、ノード数に比例してRubyオブジェクトが増える。
+
+```ruby
+{
+  type: :text,
+  start: 10,
+  length: 5,
+  children: []
+}
+```
+
+のような構造は扱いやすいが、Markdownのように細かいTextノードが大量に出る処理では不利になる。
+
+parallel arrayにすると、少なくともノード自体のRubyオブジェクト生成を避けられる。
+
+```text
+@type[node_id]
+@source_start[node_id]
+@source_len[node_id]
+@first_child[node_id]
+```
+
+というアクセスになるため、内部処理は整数IDだけで完結する。
+
+## ノード種別
+
+ノード種別はSymbolではなくInteger定数にする。
+
+```ruby
+module Markdown
+  module NodeType
+    DOCUMENT = 1
+
+    PARAGRAPH = 10
+    HEADING = 11
+    THEMATIC_BREAK = 12
+    BLOCKQUOTE = 13
+    LIST = 14
+    LIST_ITEM = 15
+    CODE_BLOCK = 16
+    HTML_BLOCK = 17
+    TABLE = 18
+    TABLE_ROW = 19
+    TABLE_CELL = 20
+
+    TEXT = 100
+    SOFTBREAK = 101
+    HARDBREAK = 102
+    EMPHASIS = 103
+    STRONG = 104
+    CODE_SPAN = 105
+    LINK = 106
+    IMAGE = 107
+    AUTOLINK = 108
+    HTML_INLINE = 109
+    ENTITY = 110
+    STRIKETHROUGH = 111
+  end
+end
+```
+
+外部APIではSymbolに変換して返してもよい。
+
+```ruby
+node.type
+#=> :paragraph
+```
+
+ただし内部処理ではIntegerのまま扱う。
+
+## ノード属性の持ち方
+
+### 共通属性
+
+すべてのノードは以下を持つ。
+
+```text
+type
+parent
+first_child
+last_child
+next_sibling
+prev_sibling
+source_start
+source_len
+```
+
+`source_start` / `source_len` は元ソース文字列におけるbyte offsetである。
+
+line / column は保持せず、必要時に `SourceMap` から計算する。
+
+### 汎用スロット
+
+ノード種別ごとの属性は、まずは汎用スロットで持つ。
+
+```text
+int1
+int2
+int3
+str1
+str2
+```
+
+例:
+
+```text
+HEADING:
+  int1 = level
+
+LIST:
+  int1 = ordered? 1 : 0
+  int2 = start_number
+  int3 = tight? 1 : 0
+
+CODE_BLOCK:
+  str1 = info
+  source_start/source_len = literal body span
+
+LINK:
+  str1 = destination
+  str2 = title
+
+IMAGE:
+  str1 = destination
+  str2 = title
+
+TABLE_CELL:
+  int1 = alignment
+```
+
+初期実装ではこれで十分だが、ノード種別が増えて複雑になった場合は、専用属性テーブルを追加する。
+
+```text
+@heading_level[node_id]
+@list_ordered[node_id]
+@link_destination[node_id]
+```
+
+ただし、最初から専用配列を増やしすぎると実装が煩雑になるため、まずは汎用スロットで開始する。
+
+## Source Span
+
+### byte offsetを真の位置とする
+
+内部位置はすべてbyte offsetで持つ。
+
+```text
+source_start: byte offset
+source_len: byte length
+```
+
+RubyのStringはUTF-8文字を含むため、文字数ベースのcolumnは高コストになりやすい。内部処理ではbyte offsetを真の値とし、line/columnは診断表示時にだけ計算する。
+
+### SourceMap
+
+`SourceMap` は改行位置の配列を持つ。
+
+```ruby
+module Markdown
+  class SourceMap
+    def initialize(source)
+      @source = source
+      @line_starts = build_line_starts(source)
+    end
+
+    def line_column(byte_offset)
+      # @line_startsを二分探索して line / column を返す
+    end
+
+    private
+
+    def build_line_starts(source)
+      starts = [0]
+      pos = 0
+
+      while (idx = source.index("\n", pos))
+        starts << idx + 1
+        pos = idx + 1
+      end
+
+      starts
+    end
+  end
+end
+```
+
+### NodeRefでの位置取得
+
+外部APIでは以下のようにする。
+
+```ruby
+node.source_span
+#=> #<SourceSpan start_byte=10 end_byte=20>
+
+node.source_location
+#=> #<SourceLocation start_line=3 start_column=5 end_line=3 end_column=15>
+```
+
+`source_location` は毎回計算すると高い可能性があるため、必要時のみ計算する。
+
+## Textノード
+
+### Textは文字列を持たない
+
+Textノードは文字列を直接持たない。
+
+```text
+TEXT:
+  source_start = 123
+  source_len = 5
+```
+
+外部APIで `node.text` が呼ばれたときだけ切り出す。
+
+```ruby
+def text(node_id)
+  @source.byteslice(@source_start[node_id], @source_len[node_id])
+end
+```
+
+これにより、parse時に小さいStringを大量生成することを避ける。
+
+### HTML rendererでの扱い
+
+HTML rendererでは、Textノードの文字列を一度Ruby Stringとして切り出すのではなく、可能ならspanを直接escapeして出力する。
+
+```ruby
+def render_text(id, out)
+  start = @arena.source_start(id)
+  len = @arena.source_len(id)
+  escape_html_span(@arena.source, start, len, out)
+end
+```
+
+初期実装では `byteslice` してもよいが、性能が問題になったらspan直接処理にする。
+
+## NodeRef
+
+### 役割
+
+外部APIでは、利用者に整数IDを直接触らせない。
+
+```ruby
+doc.root.children.each do |node|
+  puts node.type
+end
+```
+
+ただし、この `node` は実体ではなく、`arena` と `node_id` を持つ軽量wrapperである。
+
+```ruby
+module Markdown
+  class NodeRef
+    def initialize(document, node_id)
+      @document = document
+      @arena = document.arena
+      @node_id = node_id
+    end
+
+    attr_reader :node_id
+
+    def type
+      @arena.type_name(@node_id)
+    end
+
+    def children
+      Enumerator.new do |y|
+        id = @arena.first_child(@node_id)
+        until id == -1
+          y << NodeRef.new(@document, id)
+          id = @arena.next_sibling(id)
+        end
+      end
+    end
+
+    def text
+      @arena.text(@node_id)
+    end
+
+    def source_span
+      @arena.source_span(@node_id)
+    end
+  end
+end
+```
+
+### 内部処理では使わない
+
+Renderer、Formatter、InlinePassなど内部のホットパスでは `NodeRef` を作らない。
+
+```ruby
+def render_node(id, out)
+  case @arena.type(id)
+  when NodeType::TEXT
+    render_text(id, out)
+  when NodeType::PARAGRAPH
+    render_paragraph(id, out)
+  end
+end
+```
+
+`NodeRef` は外部API用と割り切る。
+
+## Document
+
+`Document` はArenaとSourceMapを保持する。
+
+```ruby
+module Markdown
+  class Document
+    attr_reader :arena
+
+    def initialize(source, arena, root_id)
+      @source = source
+      @arena = arena
+      @root_id = root_id
+      @source_map = nil
+    end
+
+    def root
+      NodeRef.new(self, @root_id)
+    end
+
+    def source_map
+      @source_map ||= SourceMap.new(@source)
+    end
+
+    def to_html
+      Renderer::HTML.new(self).render
+    end
+  end
+end
+```
+
+## Block Parser
+
+### 方針
+
+Block parserは行指向で実装する。
+
+担当するのは以下である。
+
+- blank line
+- paragraph
+- ATX heading
+- thematic break
+- blockquote
+- unordered list
+- ordered list
+- list item
+- fenced code block
+- indented code block
+- table
+- front matter
+- raw HTML block
+
+Inline構文はここでは処理しない。
+
+### Paragraphの扱い
+
+paragraphは複数行をまとめて、raw inline spanとして保持する。
+
+```markdown
+This is *emphasis
+continued here*.
+```
+
+この段階では `*emphasis...*` は解釈しない。
+
+```text
+PARAGRAPH:
+  source_start = paragraph_content_start
+  source_len = paragraph_content_len
+  children = empty
+```
+
+後続のInlinePassでchildrenを作る。
+
+### Headingの扱い
+
+```markdown
+## Hello *world*
+```
+
+Block parserは見出しレベルとinline部分のspanだけを記録する。
+
+```text
+HEADING:
+  int1 = 2
+  source_start = inline_start
+  source_len = inline_len
+```
+
+### Code blockの扱い
+
+fenced code blockはinline parseしない。
+
+````markdown
+```ruby
+puts "*not emphasis*"
+```
+````
+
+Arenaには以下のように保存する。
+
+```text
+CODE_BLOCK:
+  str1 = "ruby"
+  source_start = code_body_start
+  source_len = code_body_len
+```
+
+### Container stack
+
+blockquoteやlistはネストするため、block parserはcontainer stackを持つ。
+
+```text
+open_containers:
+  DOCUMENT
+  BLOCKQUOTE
+  LIST
+  LIST_ITEM
+```
+
+各行について、
+
+```text
+1. 既存containerに継続できるか判定
+2. 継続できないcontainerを閉じる
+3. 新しいblock開始を判定
+4. 現在のleaf blockに行内容を追加
+```
+
+という流れで処理する。
+
+## Inline Pass
+
+### 方針
+
+Block parserが作ったArena ASTを走査し、inline対象ノードに対してInlineParserを実行する。
+
+対象ノード:
+
+- PARAGRAPH
+- HEADING
+- TABLE_CELL
+- LINK内のlabel相当部分
+- IMAGE内のalt相当部分
+
+対象外ノード:
+
+- CODE_BLOCK
+- HTML_BLOCK
+- THEMATIC_BREAK
+- FRONT_MATTER
+- raw block系拡張
+
+### 処理例
+
+```ruby
+module Markdown
+  class InlinePass
+    def initialize(document)
+      @document = document
+      @arena = document.arena
+    end
+
+    def apply
+      visit(@document.root_id)
+    end
+
+    private
+
+    def visit(id)
+      case @arena.type(id)
+      when NodeType::PARAGRAPH, NodeType::HEADING, NodeType::TABLE_CELL
+        parse_inline_children(id)
+      else
+        child = @arena.first_child(id)
+        until child == -1
+          visit(child)
+          child = @arena.next_sibling(child)
+        end
+      end
+    end
+
+    def parse_inline_children(id)
+      start = @arena.source_start(id)
+      len = @arena.source_len(id)
+      InlineParser.new(@arena, parent_id: id, source_start: start, source_len: len).parse
+    end
+  end
+end
+```
+
+## Inline Scanner / Inline Lexer
+
+### 初期実装
+
+初期実装ではpure Rubyのscannerを使う。
+
+```ruby
+class InlineScanner
+  SPECIAL_BYTES = {
+    ?*.ord => true,
+    ?_.ord => true,
+    ?`.ord => true,
+    ?[.ord => true,
+    ?].ord => true,
+    ?(.ord => true,
+    ?).ord => true,
+    ?!.ord => true,
+    ?<.ord => true,
+    ?&.ord => true,
+    ?\\.ord => true,
+    ?\n.ord => true
+  }
+
+  def initialize(source, start, length)
+    @source = source
+    @pos = start
+    @end = start + length
+  end
+
+  def eof?
+    @pos >= @end
+  end
+
+  def scan_text
+    start = @pos
+
+    while @pos < @end
+      b = @source.getbyte(@pos)
+      break if SPECIAL_BYTES[b]
+      @pos += 1
+    end
+
+    [TokenType::TEXT, start, @pos - start]
+  end
+end
+```
+
+### LexerKit backend
+
+将来的にLexerKit backendを追加する。
+
+重要なのは、InlineParserがLexerKitに直接依存しないことである。
+
+InlineParserが要求するインターフェイスを固定する。
+
+```ruby
+stream.eof?
+stream.token_id
+stream.start
+stream.len
+stream.advance
+```
+
+pure Ruby scannerもLexerKit streamも、このインターフェイスに合わせる。
+
+```text
+Markdown::InlineScanner::Ruby
+Markdown::InlineScanner::LexerKit
+```
+
+### Token objectは作らない
+
+内部ではTokenオブジェクトを作らない。
+
+```text
+token_id
+start
+len
+```
+
+の3値だけで処理する。
+
+診断やdebug用途で必要な場合のみ、Token objectを生成する。
+
+## Inline Parser
+
+### 方針
+
+Inline parserは、scannerからtokenを読み取り、Arenaにinline nodeを追加する。
+
+```text
+TEXT
+EMPHASIS
+STRONG
+CODE_SPAN
+LINK
+IMAGE
+SOFTBREAK
+HARDBREAK
+AUTOLINK
+ENTITY
+```
+
+を作る。
+
+### 完全CommonMark互換は目指さない
+
+emphasisやlinkの曖昧ケースは、CommonMark完全互換を追わない。
+
+方針例:
+
+- `*em*` は対応
+- `**strong**` は対応
+- `_em_` は対応
+- `__strong__` は対応
+- `foo_bar_baz` のような単語中underscoreはtext扱い
+- 曖昧なdelimiter runはtext扱い
+- 複雑な入れ子は実用上問題ない範囲で対応
+- 処理できない構文はエラーではなくtextに戻す
+
+### Text coalescing
+
+連続するTextはできるだけまとめる。
+
+```markdown
+foo\*bar
+```
+
+を細かく、
+
+```text
+TEXT("foo")
+TEXT("*")
+TEXT("bar")
+```
+
+とせず、可能なら一つのText spanまたは少数のText nodeにまとめる。
+
+ただし、escape後の文字は元ソースと表示文字列が異なるため、必要に応じてliteral文字列を持つTextノードを許容する。
+
+```text
+TEXT_SPAN:
+  source_start/source_len
+
+TEXT_LITERAL:
+  str1 = materialized string
+```
+
+この2種類を分けてもよい。
+
+## Renderer
+
+### HTML Renderer
+
+Rendererは内部的に `node_id` で動く。
+
+```ruby
+module Markdown
+  module Renderer
+    class HTML
+      def initialize(document)
+        @document = document
+        @arena = document.arena
+        @out = +""
+      end
+
+      def render
+        render_children(@document.root_id)
+        @out
+      end
+
+      private
+
+      def render_node(id)
+        case @arena.type(id)
+        when NodeType::PARAGRAPH
+          @out << "<p>"
+          render_children(id)
+          @out << "</p>\n"
+        when NodeType::HEADING
+          level = @arena.int1(id)
+          @out << "<h#{level}>"
+          render_children(id)
+          @out << "</h#{level}>\n"
+        when NodeType::TEXT
+          render_text(id)
+        when NodeType::CODE_BLOCK
+          render_code_block(id)
+        end
+      end
+
+      def render_children(id)
+        child = @arena.first_child(id)
+        until child == -1
+          render_node(child)
+          child = @arena.next_sibling(child)
+        end
+      end
+    end
+  end
+end
+```
+
+### Safe HTML by default
+
+raw HTMLはデフォルトで無効にする。
+
+```ruby
+Markdown.render_html(source, allow_html: false)
+```
+
+`allow_html: false` の場合:
+
+- HTML blockはescapeする
+- HTML inlineもescapeする
+- link destinationは危険なschemeを抑止する
+
+### HTML fast path
+
+将来的には、完全なArena ASTを作らずにHTMLを出すfast pathを追加する。
+
+```ruby
+Markdown.render_html(source)
+```
+
+内部では、
+
+```text
+BlockParser event
+  -> InlineParser event
+    -> HTMLRenderer
+```
+
+にする。
+
+ただし、初期実装ではArena AST経由でよい。
+
+## Transformer
+
+### 初期はread-only AST
+
+Arenaはmutation可能だが、最初から自由なmutable AST APIを公開しない。
+
+初期API:
+
+```ruby
+doc.root.walk
+doc.root.children
+node.type
+node.text
+node.source_span
+```
+
+### transformは新しいDocumentを作る
+
+in-place mutationは難しいため、最初はbuilder方式にする。
+
+```ruby
+new_doc = doc.transform do |builder, node|
+  case node.type
+  when :heading
+    builder.heading(node.level + 1) do
+      builder.copy_children(node)
+    end
+  else
+    builder.copy(node)
+  end
+end
+```
+
+この方式ならArena ASTと相性がよい。
+
+### in-place mutationは後回し
+
+以下は後で追加する。
+
+```ruby
+node.append_child(...)
+node.insert_before(...)
+node.replace_with(...)
+node.delete
+```
+
+実装する場合は、以下のリンクを正しく更新する必要がある。
+
+```text
+parent
+first_child
+last_child
+next_sibling
+prev_sibling
+```
+
+## Formatter
+
+FormatterはArena ASTをMarkdownへ戻す。
+
+用途:
+
+- 曖昧なMarkdownを正規化する
+- processorが扱いやすいMarkdownへ整形する
+- CommonMark完全互換を目指さない代わりに、安定した出力形式を提供する
+
+例:
+
+```ruby
+Markdown.format(source)
+```
+
+方針:
+
+- headingはATX headingへ統一
+- fenced code blockを使う
+- list indentationを統一
+- tableを整形する
+- emphasisは `*em*`、strongは `**strong**` に統一
+- raw HTMLは設定に応じて保持またはescapeする
+
+## Diagnostics
+
+### Diagnostic object
+
+診断はsource spanを持つ。
+
+```ruby
+Diagnostic = Data.define(
+  :severity,
+  :message,
+  :start_byte,
+  :end_byte,
+  :rule
+)
+```
+
+表示時にSourceMapでline/columnへ変換する。
+
+```ruby
+diagnostic.location
+#=> line/column
+```
+
+### 用途
+
+- heading level skip
+- empty link destination
+- missing image alt
+- unsafe HTML
+- unsafe URL scheme
+- unmatched emphasis marker
+- unsupported syntax
+- deprecated extension
+
+## Performance方針
+
+### 避けること
+
+- Token objectを全トークン分作らない
+- Text nodeごとにStringを切り出さない
+- nodeごとにHashを作らない
+- 内部走査でNodeRefを作らない
+- Regexpを細かく何度も呼ばない
+- rendererで `out += ...` を使わない
+
+### 使うもの
+
+- byte offset
+- `String#getbyte`
+- `String#byteslice` は必要時のみ
+- `String#<<` によるappend
+- node_idによる内部処理
+- parallel arrays
+- optional LexerKit backend
+
+### ベンチ対象
+
+```text
+bench/fixtures/
+  readme.md
+  article.md
+  long_doc.md
+  inline_heavy.md
+  table_heavy.md
+  code_heavy.md
+```
+
+比較対象:
+
+- Markly
+- commonmarker
+- kramdown
+- 自作pure Ruby backend
+- 自作LexerKit backend
+
+測定対象:
+
+- parse only
+- render html
+- allocated objects
+- memory usage
+- GC time
+
+## API案
+
+### Parse
+
+```ruby
+doc = Markdown.parse(source)
+```
+
+### Render
+
+```ruby
+html = Markdown.render_html(source)
+```
+
+### AST traversal
+
+```ruby
+doc.root.children.each do |node|
+  puts node.type
+  puts node.source_span
+end
+```
+
+### Walk
+
+```ruby
+doc.root.walk do |node|
+  puts "#{node.type}: #{node.source_span}"
+end
+```
+
+### Find
+
+```ruby
+headings = doc.root.find_all(:heading)
+```
+
+### Diagnostics
+
+```ruby
+doc.diagnostics.each do |diagnostic|
+  puts diagnostic.message
+end
+```
+
+### Format
+
+```ruby
+formatted = Markdown.format(source)
+```
+
+## 実装フェーズ
+
+### Phase 1: 素直なプロトタイプ
+
+- 行指向block parser
+- 最小inline parser
+- 普通のRubyオブジェクトASTでもよい
+- ノード種別とAST形状を固める
+
+目的は仕様確認であり、速度はまだ追わない。
+
+### Phase 2: Arena AST化
+
+- ノードを `node_id` ベースにする
+- parallel arraysへ移行
+- Textをsource span化
+- NodeRef外部APIを追加
+
+### Phase 3: Renderer最適化
+
+- HTML rendererを `node_id` ベースにする
+- Text spanを直接escapeする
+- allocationを測定して削減する
+
+### Phase 4: Inline scanner最適化
+
+- pure Ruby scannerを `getbyte` ベースにする
+- Token objectを作らない
+- inline-heavy benchmarkで測る
+
+### Phase 5: LexerKit backend
+
+- InlineScanner interfaceを固定
+- LexerKit stream backendを追加
+- pure Ruby backendと比較する
+- optional dependencyにするか標準依存にするか判断する
+
+### Phase 6: HTML fast path
+
+- AST構築なしでHTMLを出すevent rendererを検討
+- `Markdown.render_html` の高速化を狙う
+- `Markdown.parse` はArena ASTを返す
+
+## まとめ
+
+本設計では、Markdown ASTをRubyオブジェクトツリーとして表現せず、内部的にはArenaに格納された数値IDの集合として扱う。
+
+```text
+内部:
+  node_id
+  parallel arrays
+  source span
+  no Token object
+  no Node object on hot path
+
+外部:
+  Document
+  NodeRef
+  Enumerator
+  source_span
+  diagnostics
+```
+
+これにより、RubyらしいAST APIを提供しつつ、parse/render時のallocationを抑える。
+
+Markly/cmarkと完全に同等の速度をpure Rubyだけで達成するのは難しいが、この設計なら少なくとも以下を狙える。
+
+- kramdown的なpure Ruby processorより現代的な低allocation設計
+- 通常文書で体感上遜色ない速度
+- LexerKit backendによるinline lexing高速化
+- 将来的なnative fast pathの追加
+- AST/diagnostics/formatter/transformerを備えたMarkdown document processor
+
+最終的な位置づけは以下である。
+
+```text
+A pragmatic Markdown document processor for Ruby,
+with a low-allocation arena AST, source spans,
+safe HTML rendering, and optional LexerKit acceleration.
+```
