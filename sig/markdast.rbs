@@ -1,4 +1,36 @@
 module Markdast
   VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+  def self.parse: (String source, ?allow_html: bool) -> Document
+  def self.render_html: (String source, ?allow_html: bool) -> String
+
+  class Document
+    attr_reader source: String
+    attr_reader arena: Arena
+    attr_reader root_id: Integer
+
+    def root: () -> NodeRef
+    def to_html: () -> String
+    def allow_html?: () -> bool
+  end
+
+  class NodeRef
+    include Enumerable[NodeRef]
+
+    attr_reader document: Document
+    attr_reader node_id: Integer
+
+    def type: () -> Symbol
+    def children: () -> Array[NodeRef]
+    def walk: () { (NodeRef) -> void } -> void
+    def walk: () -> Enumerator[NodeRef, void]
+    def find_all: (Symbol type) -> Array[NodeRef]
+    def text: () -> String?
+    def source_span: () -> SourceSpan?
+  end
+
+  class Arena
+  end
+
+  SourceSpan = Data[Integer, Integer]
 end
