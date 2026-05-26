@@ -86,7 +86,7 @@ module Markdast
     end
 
     def parse_emphasis(parent_id, delimiter, type, start_index)
-      closing = @scanner.remaining.index(delimiter)
+      closing = find_emphasis_closing(delimiter, type)
       return append_text(parent_id, delimiter, start_index: start_index, end_index: @scanner.index, literal: true) unless closing
 
       content = @scanner.advance(closing)
@@ -98,7 +98,7 @@ module Markdast
     end
 
     def parse_triple_emphasis(parent_id, delimiter, start_index)
-      closing = @scanner.remaining.index(delimiter)
+      closing = @scanner.remaining.rindex(delimiter)
       return append_text(parent_id, delimiter, start_index: start_index, end_index: @scanner.index, literal: true) unless closing
 
       content = @scanner.advance(closing)
@@ -140,7 +140,23 @@ module Markdast
 
     def parse_html_inline(parent_id, start_index)
       source = @scanner.remaining
-      match = /\A<[^>\n]+>/.match(source)
+      if (autolink = uri_autolink(source))
+        @scanner.advance(autolink[:raw].length)
+        node_id = @arena.add_node(NodeType::LINK, **source_attributes(start_index, @scanner.index), str1: autolink[:destination])
+        @arena.append_child(parent_id, node_id)
+        @arena.append_child(node_id, @arena.add_node(NodeType::TEXT, str1: autolink[:label]))
+        return
+      end
+
+      if (autolink = email_autolink(source))
+        @scanner.advance(autolink[:raw].length)
+        node_id = @arena.add_node(NodeType::LINK, **source_attributes(start_index, @scanner.index), str1: "mailto:#{autolink[:email]}")
+        @arena.append_child(parent_id, node_id)
+        @arena.append_child(node_id, @arena.add_node(NodeType::TEXT, str1: autolink[:email]))
+        return
+      end
+
+      match = html_tag_match(source)
       return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless match
 
       @scanner.advance(match[0].length)
@@ -281,6 +297,69 @@ module Markdast
 
     def normalize_reference_label(label)
       label.to_s.strip.downcase.gsub(/[ \t\r\n]+/, " ")
+    end
+
+    def uri_autolink(source)
+      match = /\A<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.match(source)
+      return unless match
+
+      { raw: match[0], destination: match[1], label: match[1] }
+    end
+
+    def email_autolink(source)
+      match = /\A<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.match(source)
+      return unless match
+
+      { raw: match[0], email: match[1] }
+    end
+
+    def html_tag_match(source)
+      %r{\A</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}.match(source)
+    end
+
+    def find_emphasis_closing(delimiter, type)
+      source = @scanner.remaining
+      return source.rindex(delimiter) unless type == NodeType::EMPHASIS && delimiter.length == 1
+
+      candidates = valid_single_delimiter_indices(source, delimiter)
+      candidates.find do |candidate|
+        inside = source[0...candidate]
+        valid_single_delimiter_indices(inside, delimiter).length.even? &&
+          valid_double_delimiter_count(inside, delimiter).even?
+      end || candidates.last
+    end
+
+    def valid_single_delimiter_indices(source, delimiter)
+      indexes = []
+      index = 0
+      while index < source.length
+        if source[index] == delimiter
+          prev_same = index.positive? && source[index - 1] == delimiter
+          next_same = index + 1 < source.length && source[index + 1] == delimiter
+          indexes << index unless prev_same || next_same
+        end
+        index += 1
+      end
+      indexes
+    end
+
+    def valid_double_delimiter_count(source, delimiter)
+      count = 0
+      index = 0
+      pair = delimiter * 2
+      while index < source.length - 1
+        if source[index, 2] == pair
+          prev_same = index.positive? && source[index - 1] == delimiter
+          next_same = index + 2 < source.length && source[index + 2] == delimiter
+          unless prev_same || next_same
+            count += 1
+            index += 2
+            next
+          end
+        end
+        index += 1
+      end
+      count
     end
 
     def triple_delimiter_open?

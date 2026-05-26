@@ -112,6 +112,93 @@ RSpec.describe Markdast do
       expect(doc.root.find_all(:heading).map(&:text)).to eq(["One"])
       expect(doc.root.find_all(:emphasis).map(&:text)).to eq(["three"])
     end
+
+    it "exports a nested AST hash from the arena" do
+      doc = described_class.parse("# Hello *world*\n\n[site](https://example.com)")
+
+      expect(doc.to_ast).to eq({
+        type: :document,
+        source_span: Markdast::SourceSpan.new(0, 44),
+        children: [
+          {
+            type: :heading,
+            source_span: Markdast::SourceSpan.new(2, 15),
+            attributes: { level: 1, text: "Hello world" },
+            children: [
+              {
+                type: :text,
+                source_span: Markdast::SourceSpan.new(2, 8),
+                attributes: { text: "Hello " },
+                children: []
+              },
+              {
+                type: :emphasis,
+                source_span: Markdast::SourceSpan.new(8, 15),
+                children: [
+                  {
+                    type: :text,
+                    source_span: Markdast::SourceSpan.new(9, 14),
+                    attributes: { text: "world" },
+                    children: []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            type: :paragraph,
+            source_span: Markdast::SourceSpan.new(17, 44),
+            attributes: { text: "site" },
+            children: [
+              {
+                type: :link,
+                source_span: Markdast::SourceSpan.new(17, 44),
+                attributes: { destination: "https://example.com", title: nil, text: "site" },
+                children: [
+                  {
+                    type: :text,
+                    source_span: Markdast::SourceSpan.new(18, 22),
+                    attributes: { text: "site" },
+                    children: []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      })
+    end
+
+    it "exports a subtree hash from a node reference" do
+      doc = described_class.parse("# Hello *world*")
+      heading = doc.root.children.first
+
+      expect(heading.to_h).to eq({
+        type: :heading,
+        source_span: Markdast::SourceSpan.new(2, 15),
+        attributes: { level: 1, text: "Hello world" },
+        children: [
+          {
+            type: :text,
+            source_span: Markdast::SourceSpan.new(2, 8),
+            attributes: { text: "Hello " },
+            children: []
+          },
+          {
+            type: :emphasis,
+            source_span: Markdast::SourceSpan.new(8, 15),
+            children: [
+              {
+                type: :text,
+                source_span: Markdast::SourceSpan.new(9, 14),
+                attributes: { text: "world" },
+                children: []
+              }
+            ]
+          }
+        ]
+      })
+    end
   end
 
   describe ".render_html" do

@@ -60,10 +60,70 @@ RSpec.describe "CommonMark compatibility" do
       html: "<p>foo<em><strong>bar</strong></em>baz</p>\n"
     },
     {
+      number: 418,
+      section: "Emphasis and strong emphasis",
+      markdown: "*foo **bar *baz* bim** bop*\n",
+      html: "<p><em>foo <strong>bar <em>baz</em> bim</strong> bop</em></p>\n"
+    },
+    {
       number: 482,
       section: "Inline links",
       markdown: "[link](/uri \"title\")\n",
       html: "<p><a href=\"/uri\" title=\"title\">link</a></p>\n"
+    },
+    {
+      number: 594,
+      section: "Autolinks",
+      markdown: "<http://foo.bar.baz>\n",
+      html: "<p><a href=\"http://foo.bar.baz\">http://foo.bar.baz</a></p>\n"
+    },
+    {
+      number: 595,
+      section: "Autolinks",
+      markdown: "<https://foo.bar.baz/test?q=hello&id=22&boolean>\n",
+      html: "<p><a href=\"https://foo.bar.baz/test?q=hello&amp;id=22&amp;boolean\">https://foo.bar.baz/test?q=hello&amp;id=22&amp;boolean</a></p>\n"
+    },
+    {
+      number: 193,
+      section: "Link reference definitions",
+      markdown: "   [foo]:\n      /url\n           'the title'\n[foo]\n",
+      html: "<p><a href=\"/url\" title=\"the title\">foo</a></p>\n"
+    },
+    {
+      number: 196,
+      section: "Link reference definitions",
+      markdown: "[foo]: /url '\ntitle\nline1\nline2\n'\n\n[foo]\n",
+      html: "<p><a href=\"/url\" title=\"\ntitle\nline1\nline2\n\">foo</a></p>\n"
+    },
+    {
+      number: 217,
+      section: "Link reference definitions",
+      markdown: "[foo]: /foo-url \"foo\"\n[bar]: /bar-url\n  \"bar\"\n[baz]: /baz-url\n\n[foo],\n[bar],\n[baz]\n",
+      html: "<p><a href=\"/foo-url\" title=\"foo\">foo</a>,\n<a href=\"/bar-url\" title=\"bar\">bar</a>,\n<a href=\"/baz-url\">baz</a></p>\n"
+    },
+    {
+      number: 218,
+      section: "Link reference definitions",
+      markdown: "[foo]\n\n> [foo]: /url\n",
+      html: "<p><a href=\"/url\">foo</a></p>\n<blockquote>\n</blockquote>\n"
+    },
+    {
+      number: 617,
+      section: "Raw HTML",
+      markdown: "Foo <responsive-image src=\"foo.jpg\" />\n",
+      html: "<p>Foo <responsive-image src=\"foo.jpg\" /></p>\n"
+    },
+    {
+      number: 618,
+      section: "Raw HTML",
+      markdown: "<33> <__>\n",
+      html: "<p>&lt;33&gt; &lt;__&gt;</p>\n"
+    },
+    {
+      number: 619,
+      section: "Raw HTML",
+      markdown: "<a h*#ref=\"hi\">\n",
+      html: "<p>&lt;a h*#ref=&quot;hi&quot;&gt;</p>\n"
     },
     {
       number: 527,
@@ -100,6 +160,36 @@ RSpec.describe "CommonMark compatibility" do
       section: "Soft line breaks",
       markdown: "foo\nbaz\n",
       html: "<p>foo\nbaz</p>\n"
+    },
+    {
+      number: 596,
+      section: "Autolinks",
+      markdown: "<foo@bar.example.com>\n",
+      html: "<p><a href=\"mailto:foo@bar.example.com\">foo@bar.example.com</a></p>\n"
+    },
+    {
+      number: 597,
+      section: "Autolinks",
+      markdown: "<foo+special@Bar.baz-bar0.com>\n",
+      html: "<p><a href=\"mailto:foo+special@Bar.baz-bar0.com\">foo+special@Bar.baz-bar0.com</a></p>\n"
+    },
+    {
+      number: 148,
+      section: "HTML blocks",
+      markdown: "<table>\n  <tr>\n    <td>\n           hi\n    </td>\n  </tr>\n</table>\n\nokay.\n",
+      html: "<table>\n  <tr>\n    <td>\n           hi\n    </td>\n  </tr>\n</table>\n<p>okay.</p>\n"
+    },
+    {
+      number: 149,
+      section: "HTML blocks",
+      markdown: "<pre>\n *foo*\n</pre>\n*bar*\n",
+      html: "<pre>\n *foo*\n</pre>\n<p><em>bar</em></p>\n"
+    },
+    {
+      number: 152,
+      section: "HTML blocks",
+      markdown: "<!-- foo -->\n\n    <!-- foo -->\n",
+      html: "<!-- foo -->\n<pre><code>&lt;!-- foo --&gt;\n</code></pre>\n"
     }
   ].freeze
 

@@ -27,5 +27,9 @@ module Markdast
     def to_html
       Renderer::HTML.new(self).render
     end
+
+    def to_ast
+      root.to_h
+    end
   end
 end

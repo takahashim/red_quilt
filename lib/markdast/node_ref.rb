@@ -53,5 +53,43 @@ module Markdast
     def find_all(type)
       walk.select { |node| node.type == type }
     end
+
+    def to_h
+      ast = {
+        type: type,
+        source_span: source_span,
+        children: children.map(&:to_h)
+      }
+
+      attributes = ast_attributes
+      ast[:attributes] = attributes unless attributes.empty?
+      ast
+    end
+
+    private
+
+    def ast_attributes
+      case @arena.type(@node_id)
+      when NodeType::HEADING
+        { level: @arena.int1(@node_id), text: text }
+      when NodeType::LIST
+        {
+          ordered: @arena.int1(@node_id) == 1,
+          start_number: @arena.int2(@node_id),
+          tight: @arena.int3(@node_id) == 1,
+          delimiter: @arena.str1(@node_id)
+        }
+      when NodeType::TABLE_ROW, NodeType::TABLE_CELL
+        { header: @arena.int1(@node_id) == 1, text: text }
+      when NodeType::TEXT, NodeType::CODE_SPAN, NodeType::HTML_BLOCK, NodeType::HTML_INLINE, NodeType::PARAGRAPH
+        { text: text }
+      when NodeType::CODE_BLOCK
+        { text: @arena.text(@node_id), info: @arena.str2(@node_id) }
+      when NodeType::LINK, NodeType::IMAGE
+        { destination: @arena.str1(@node_id), title: @arena.str2(@node_id), text: text }
+      else
+        {}
+      end
+    end
   end
 end

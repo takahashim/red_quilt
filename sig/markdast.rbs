@@ -11,6 +11,7 @@ module Markdast
 
     def root: () -> NodeRef
     def to_html: () -> String
+    def to_ast: () -> Hash[Symbol, untyped]
     def allow_html?: () -> bool
   end
 
@@ -25,6 +26,7 @@ module Markdast
     def walk: () { (NodeRef) -> void } -> void
     def walk: () -> Enumerator[NodeRef, void]
     def find_all: (Symbol type) -> Array[NodeRef]
+    def to_h: () -> Hash[Symbol, untyped]
     def text: () -> String?
     def source_span: () -> SourceSpan?
   end

@@ -38,9 +38,9 @@ module Markdast
         elsif thematic_break?(line.content)
           @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: span_len(line)))
           index += 1
-        elsif (reference = link_reference_definition(line.content))
-          store_reference(reference)
-          index += 1
+        elsif (reference = link_reference_definition(lines, index))
+          store_reference(reference[:reference])
+          index += reference[:consumed]
         elsif table_start?(lines, index)
           index = parse_table(parent_id, lines, index, transformed)
         elsif html_block_start?(line.content)
@@ -235,18 +235,71 @@ module Markdast
     def parse_html_block(parent_id, lines, index, transformed)
       start_index = index
       html_lines = []
-      while index < lines.length && !lines[index].blank
-        html_lines << lines[index].content
-        index += 1
+      type = html_block_type(lines[index].content)
+
+      case type
+      when 1
+        # Type 1: script|pre|style|textarea, terminated by closing tag
+        closing_tag = extract_closing_tag_name(lines[index].content)
+        while index < lines.length
+          html_lines << lines[index].content
+          break if lines[index].content.downcase.include?("</#{closing_tag}>")
+          index += 1
+        end
+        index += 1 if index < lines.length
+      when 2
+        # Type 2: comment, terminated by -->
+        while index < lines.length
+          html_lines << lines[index].content
+          break if lines[index].content.include?("-->")
+          index += 1
+        end
+        index += 1 if index < lines.length
+      when 3
+        # Type 3: processing instruction, terminated by ?>
+        while index < lines.length
+          html_lines << lines[index].content
+          break if lines[index].content.include?("?>")
+          index += 1
+        end
+        index += 1 if index < lines.length
+      when 4
+        # Type 4: declaration, terminated by >
+        while index < lines.length
+          html_lines << lines[index].content
+          break if lines[index].content.include?(">")
+          index += 1
+        end
+        index += 1 if index < lines.length
+      when 5
+        # Type 5: CDATA, terminated by ]]>
+        while index < lines.length
+          html_lines << lines[index].content
+          break if lines[index].content.include?("]]>")
+          index += 1
+        end
+        index += 1 if index < lines.length
+      else
+        # Types 6 & 7: continue until blank line
+        while index < lines.length && !lines[index].blank
+          html_lines << lines[index].content
+          index += 1
+        end
       end
+
       start_byte = lines[start_index].start_byte
-      end_byte = lines[index - 1].end_byte
+      end_byte = lines[start_index + html_lines.length - 1].end_byte
       html_id = @arena.add_node(NodeType::HTML_BLOCK,
                                 source_start: start_byte,
                                 source_len: end_byte - start_byte,
                                 str1: html_lines.join("\n"))
       @arena.append_child(parent_id, html_id)
       index
+    end
+
+    def extract_closing_tag_name(text)
+      match = /\A<(script|pre|style|textarea)/i.match(text)
+      match ? match[1].downcase : "script"
     end
 
     def parse_table(parent_id, lines, index, transformed)
@@ -312,7 +365,7 @@ module Markdast
         line = lines[index]
         break if line.blank
         break if index > start_index && paragraph_interrupt?(lines, index)
-        break if link_reference_definition(line.content)
+        break if link_reference_definition(lines, index)
 
         paragraph_lines << line
         index += 1
@@ -435,8 +488,34 @@ module Markdast
     end
 
     def html_block_start?(text)
+      # Indented code block takes precedence (4+ spaces)
+      return false if text.start_with?("    ")
+      !html_block_type(text).nil?
+    end
+
+    def html_block_type(text)
       stripped = text.lstrip
-      stripped.start_with?("<") && stripped.end_with?(">")
+      return nil if stripped.empty?
+
+      # Type 1: <script|pre|style|textarea (case-insensitive) followed by whitespace or >
+      return 1 if stripped.match?(%r{\A<(script|pre|style|textarea)(?:\s|>|$)}i)
+
+      # Type 2: <!--
+      return 2 if stripped.start_with?("<!--")
+
+      # Type 3: <?
+      return 3 if stripped.start_with?("<?")
+
+      # Type 4: <! followed by uppercase ASCII letter
+      return 4 if stripped.match?(%r{\A<![A-Z]})
+
+      # Type 5: <![CDATA[
+      return 5 if stripped.start_with?("<![CDATA[")
+
+      # Type 6 & 7: Valid HTML tags
+      return 7 if valid_html_tag?(stripped)
+
+      nil
     end
 
     def table_start?(lines, index)
@@ -460,14 +539,66 @@ module Markdast
       body.split("|", -1)
     end
 
-    def link_reference_definition(text)
-      match = /\A {0,3}\[([^\]]+)\]:[ \t]*(\S+)(?:[ \t]+\"([^\"]*)\")?[ \t]*\z/.match(text)
+    def valid_html_tag?(text)
+      text.match?(%r{\A</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>\z}) ||
+        text.match?(%r{\A<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*>.*</[A-Za-z][A-Za-z0-9-]*>\z})
+    end
+
+    def link_reference_definition(lines, index)
+      text = lines[index].content
+      match = /\A {0,3}\[([^\]]+)\]:(.*)\z/.match(text)
       return unless match
 
+      label = normalize_reference_label(match[1])
+      remainder = match[2].to_s
+      consumed = 1
+
+      chunks = [remainder]
+      if remainder.strip.empty?
+        return unless index + consumed < lines.length
+
+        next_line = lines[index + consumed]
+        return if next_line.blank
+
+        chunks << next_line.content
+        consumed += 1
+      end
+
+      destination, rest = parse_reference_destination(chunks.shift.to_s)
+      if destination.nil?
+        destination, rest = parse_reference_destination(chunks.first.to_s)
+        return unless destination
+
+        chunks.shift
+      end
+
+      title_source = rest.to_s
+      if title_source.strip.empty? && index + consumed < lines.length
+        next_line = lines[index + consumed]
+        if next_line && potential_reference_title_start?(next_line.content)
+          title_source = next_line.content
+          consumed += 1
+        end
+      end
+
+      while index + consumed < lines.length && title_needs_more_lines?(title_source)
+        next_line = lines[index + consumed]
+        break if next_line.blank
+
+        title_source = title_source.empty? ? next_line.content : "#{title_source}\n#{next_line.content}"
+        consumed += 1
+      end
+
+      title, trailing = parse_reference_title(title_source)
+      return if trailing && trailing.match?(/\S/)
+
       {
-        label: normalize_reference_label(match[1]),
-        destination: strip_angle_brackets(match[2]),
-        title: match[3]
+        reference: {
+          label: label,
+          destination: strip_angle_brackets(destination),
+          title: title
+        },
+        consumed: consumed
       }
     end
 
@@ -477,6 +608,76 @@ module Markdast
 
     def strip_angle_brackets(destination)
       destination.start_with?("<") && destination.end_with?(">") ? destination[1...-1] : destination
+    end
+
+    def parse_reference_destination(text)
+      source = text.to_s.lstrip
+      return [nil, nil] if source.empty?
+
+      if source.start_with?("<")
+        close = source.index(">")
+        return [nil, nil] unless close
+
+        return [source[0..close], source[(close + 1)..].to_s]
+      end
+
+      match = /\A(\S+)(.*)\z/m.match(source)
+      return [nil, nil] unless match
+
+      [match[1], match[2].to_s]
+    end
+
+    def title_needs_more_lines?(text)
+      stripped = text.to_s.lstrip
+      return false if stripped.empty?
+
+      quote = stripped[0]
+      closer = reference_title_closer(quote)
+      return false unless closer
+      return false if stripped.length > 1 && stripped.end_with?(closer)
+
+      true
+    end
+
+    def potential_reference_title_start?(text)
+      %w[" ' (].include?(text.to_s.lstrip[0])
+    end
+
+    def parse_reference_title(text)
+      stripped = text.to_s.lstrip
+      return [nil, stripped] if stripped.empty?
+
+      opener = stripped[0]
+      closer = reference_title_closer(opener)
+      return [nil, stripped] unless closer
+
+      body = +""
+      escaped = false
+      index = 1
+      while index < stripped.length
+        char = stripped[index]
+        if char == "\\" && !escaped
+          escaped = true
+          body << char
+        elsif char == closer && !escaped
+          trailing = stripped[(index + 1)..].to_s
+          return [unescape_reference_text(body), trailing]
+        else
+          body << char
+          escaped = false
+        end
+        index += 1
+      end
+
+      [nil, stripped]
+    end
+
+    def reference_title_closer(opener)
+      { '"' => '"', "'" => "'", "(" => ")" }[opener]
+    end
+
+    def unescape_reference_text(text)
+      text.gsub(/\\(.)/, "\\1")
     end
 
     def store_reference(reference)
