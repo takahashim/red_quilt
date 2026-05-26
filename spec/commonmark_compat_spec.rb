@@ -734,6 +734,12 @@ RSpec.describe "CommonMark compatibility" do
     { number: 275, section: "List items", markdown: "   foo\n\nbar\n", html: "<p>foo</p>\n<p>bar</p>\n" },
     { number: 276, section: "List items", markdown: "-    foo\n\n  bar\n", html: "<ul>\n<li>foo</li>\n</ul>\n<p>bar</p>\n" },
     { number: 552, section: "Links", markdown: "[\n ]\n\n[\n ]: /uri\n", html: "<p>[\n]</p>\n<p>[\n]: /uri</p>\n" },
+    { number: 128, section: "Fenced code blocks", markdown: "> ```\n> aaa\n\nbbb\n", html: "<blockquote>\n<pre><code>aaa\n</code></pre>\n</blockquote>\n<p>bbb</p>\n" },
+    { number: 232, section: "Block quotes", markdown: "> # Foo\n> bar\nbaz\n", html: "<blockquote>\n<h1>Foo</h1>\n<p>bar\nbaz</p>\n</blockquote>\n" },
+    { number: 233, section: "Block quotes", markdown: "> bar\nbaz\n> foo\n", html: "<blockquote>\n<p>bar\nbaz\nfoo</p>\n</blockquote>\n" },
+    { number: 242, section: "Block quotes", markdown: "> foo\n\n> bar\n", html: "<blockquote>\n<p>foo</p>\n</blockquote>\n<blockquote>\n<p>bar</p>\n</blockquote>\n" },
+    { number: 247, section: "Block quotes", markdown: "> bar\nbaz\n", html: "<blockquote>\n<p>bar\nbaz</p>\n</blockquote>\n" },
+    { number: 252, section: "Block quotes", markdown: ">     code\n\n>    not code\n", html: "<blockquote>\n<pre><code>code\n</code></pre>\n</blockquote>\n<blockquote>\n<p>not code</p>\n</blockquote>\n" },
   ].freeze
 
   KNOWN_GAPS = [

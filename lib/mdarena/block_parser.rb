@@ -59,11 +59,32 @@ module Mdarena
 
     def parse_blockquote(parent_id, lines, index)
       block_lines = []
+      paragraph_open = false
+
       while index < lines.length
         line = lines[index]
-        break if !line.blank && !blockquote_line?(line.content)
 
-        block_lines << strip_blockquote_prefix(line)
+        if line.blank
+          # Blank line outside the blockquote prefix closes it.
+          break
+        elsif blockquote_line?(line.content)
+          stripped = strip_blockquote_prefix(line)
+          paragraph_open =
+            if stripped.content.strip.empty?
+              false # `>` 単独 (or `>` followed by blank) ends any open paragraph
+            else
+              paragraph_eligible_line?(stripped.content)
+            end
+          block_lines << stripped
+        elsif paragraph_open && !lazy_break?(lines, index)
+          # Lazy continuation: a `>`-less line is absorbed into the
+          # currently open paragraph as long as it doesn't itself start
+          # a new block. Only allowed while the most recent in-quote
+          # line is paragraph-eligible content.
+          block_lines << line
+        else
+          break
+        end
         index += 1
       end
 
@@ -73,6 +94,20 @@ module Mdarena
       @arena.append_child(parent_id, block_id)
       parse_lines(block_id, block_lines, transformed: true)
       index
+    end
+
+    # Whether this line looks like plain paragraph content (eligible to be
+    # extended by a subsequent lazy-continuation line). Anything that
+    # would start another block type is rejected.
+    def paragraph_eligible_line?(content)
+      return false if indented_code_line?(content)
+      return false if fenced_code_start(content)
+      return false if atx_heading(content)
+      return false if thematic_break?(content)
+      return false if html_block_start?(content)
+      return false if list_item_start(content)
+      return false if blockquote_line?(content)
+      true
     end
 
     def parse_list(parent_id, lines, index)
