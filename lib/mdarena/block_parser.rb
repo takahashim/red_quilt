@@ -321,9 +321,11 @@ module Mdarena
 
       # Each content line is stripped of up to the fence's own leading
       # indent (CommonMark spec: a fence indented by N spaces strips up
-      # to N spaces from every content line, but never more).
-      strip_re = /\A {0,#{fence[:indent] || 0}}/
-      code = content_lines.map { |l| l.content.sub(strip_re, "") }.join("\n")
+      # to N spaces from every content line, but never more). Manual
+      # byte scan beats compiling an interpolated regex per block and
+      # short-circuits when the fence had no indent (the common case).
+      indent_n = fence[:indent] || 0
+      code = content_lines.map { |l| strip_leading_spaces(l.content, indent_n) }.join("\n")
       code << "\n" unless content_lines.empty?
       source_start = content_lines.empty? ? start_line.start_byte : content_lines.first.start_byte
       source_end = content_lines.empty? ? start_line.end_byte : content_lines.last.end_byte
@@ -514,7 +516,7 @@ module Mdarena
       # reaches this branch). Continuation lines have no fixed indent
       # cap — all leading whitespace is stripped before joining.
       stripped = paragraph_lines.map.with_index do |l, i|
-        i.zero? ? l.content.sub(/\A {0,3}/, "") : l.content.sub(/\A[ \t]*/, "")
+        i.zero? ? strip_leading_spaces(l.content, 3) : strip_leading_whitespace(l.content)
       end
       # Trailing whitespace on the last line is dropped (no hard-break
       # without a following content line).
@@ -587,18 +589,52 @@ module Mdarena
       true
     end
 
+    # Strips up to `max` leading 0x20 bytes from `text`. Returns the
+    # original string when nothing changed, so callers avoid an
+    # allocation in the common no-indent case.
+    def strip_leading_spaces(text, max)
+      return text if max <= 0
+      bytes = text.bytesize
+      i = 0
+      while i < max && i < bytes && text.getbyte(i) == 0x20
+        i += 1
+      end
+      return text if i.zero?
+      text.byteslice(i..)
+    end
+
+    # Strips all leading 0x20 / 0x09 bytes from `text`. Same no-alloc
+    # return as `strip_leading_spaces` when the string already starts
+    # at a non-whitespace byte.
+    def strip_leading_whitespace(text)
+      bytes = text.bytesize
+      i = 0
+      while i < bytes
+        b = text.getbyte(i)
+        break unless b == 0x20 || b == 0x09
+        i += 1
+      end
+      return text if i.zero?
+      text.byteslice(i..)
+    end
+
     def build_lines(source)
+      # split("\n", -1) avoids the extra slice/allocation that
+      # each_line + chomp incurs per line, and `\S` against the line is
+      # cheaper than allocating a stripped copy just to check emptiness.
+      parts = source.split("\n", -1)
+      parts.pop if source.end_with?("\n")
       lines = []
       offset = 0
-      source.each_line do |line|
-        raw = line.end_with?("\n") ? line[0...-1] : line
+      parts.each do |raw|
+        size = raw.bytesize
         lines << Line.new(
           content: raw,
           start_byte: offset,
-          end_byte: offset + raw.bytesize,
-          blank: raw.strip.empty?
+          end_byte: offset + size,
+          blank: !raw.match?(/\S/)
         )
-        offset += line.bytesize
+        offset += size + 1
       end
       lines
     end
