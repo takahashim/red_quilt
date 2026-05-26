@@ -39,10 +39,10 @@ module Markdast
         return
       end
 
-      child_id = @arena.first_child(node_id)
+      child_id = @arena.raw_first_child_id(node_id)
       until child_id == -1
         visit(child_id)
-        child_id = @arena.next_sibling(child_id)
+        child_id = @arena.raw_next_sibling_id(child_id)
       end
     end
   end

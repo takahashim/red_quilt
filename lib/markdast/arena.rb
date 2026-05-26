@@ -170,23 +170,27 @@ module Markdast
       NodeType.name_for(@type[id])
     end
 
-    def parent(id)
+    # Structural id accessors. The `raw_` prefix flags that these return
+    # raw column values that may be the NO_NODE sentinel, and the
+    # `_id` suffix flags that the returned integer is a node id
+    # (suitable for feeding back into other Arena methods).
+    def raw_parent_id(id)
       @parent[id]
     end
 
-    def first_child(id)
+    def raw_first_child_id(id)
       @first_child[id]
     end
 
-    def last_child(id)
+    def raw_last_child_id(id)
       @last_child[id]
     end
 
-    def next_sibling(id)
+    def raw_next_sibling_id(id)
       @next_sibling[id]
     end
 
-    def prev_sibling(id)
+    def raw_prev_sibling_id(id)
       @prev_sibling[id]
     end
 

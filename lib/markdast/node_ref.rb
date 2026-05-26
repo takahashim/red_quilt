@@ -34,7 +34,7 @@ module Markdast
     end
 
     def text
-      first_child_id = @arena.first_child(@node_id)
+      first_child_id = @arena.raw_first_child_id(@node_id)
       return @arena.text(@node_id) if first_child_id == -1
 
       text = +""

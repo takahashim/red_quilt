@@ -19,10 +19,10 @@ module Markdast
       private
 
       def render_children(node_id)
-        child_id = @arena.first_child(node_id)
+        child_id = @arena.raw_first_child_id(node_id)
         until child_id == -1
           render_node(child_id)
-          child_id = @arena.next_sibling(child_id)
+          child_id = @arena.raw_next_sibling_id(child_id)
         end
       end
 
@@ -122,18 +122,18 @@ module Markdast
       end
 
       def render_list_item(node_id)
-        parent_id = @arena.parent(node_id)
+        parent_id = @arena.raw_parent_id(node_id)
         tight = parent_id != -1 && @arena.type(parent_id) == NodeType::LIST && @arena.int3(parent_id) == 1
         @out << "\n" unless tight
 
-        child_id = @arena.first_child(node_id)
+        child_id = @arena.raw_first_child_id(node_id)
         until child_id == -1
           if tight && @arena.type(child_id) == NodeType::PARAGRAPH
             render_children(child_id)
           else
             render_node(child_id)
           end
-          child_id = @arena.next_sibling(child_id)
+          child_id = @arena.raw_next_sibling_id(child_id)
         end
       end
 

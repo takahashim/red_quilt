@@ -17,24 +17,24 @@ RSpec.describe Markdast::Inline::Builder do
 
   def children_summary(parent_id)
     out = []
-    child = arena.first_child(parent_id)
+    child = arena.raw_first_child_id(parent_id)
     until child == -1
       out << {
         type: Markdast::NodeType.name_for(arena.type(child)),
         text: arena.text(child),
         children: child_text_kinds(child)
       }
-      child = arena.next_sibling(child)
+      child = arena.raw_next_sibling_id(child)
     end
     out
   end
 
   def child_text_kinds(parent_id)
-    child = arena.first_child(parent_id)
+    child = arena.raw_first_child_id(parent_id)
     arr = []
     until child == -1
       arr << Markdast::NodeType.name_for(arena.type(child))
-      child = arena.next_sibling(child)
+      child = arena.raw_next_sibling_id(child)
     end
     arr
   end
@@ -42,7 +42,7 @@ RSpec.describe Markdast::Inline::Builder do
   describe "empty input" do
     it "accepts an empty token stream without raising" do
       expect { builder.build(paragraph_id, tokens) }.not_to raise_error
-      expect(arena.first_child(paragraph_id)).to eq(-1)
+      expect(arena.raw_first_child_id(paragraph_id)).to eq(-1)
     end
   end
 
@@ -108,7 +108,7 @@ RSpec.describe Markdast::Inline::Builder do
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:text, :hardbreak, :text])
 
-        first_text = arena.first_child(paragraph_id)
+        first_text = arena.raw_first_child_id(paragraph_id)
         expect(arena.text(first_text)).to eq("a")
       end
     end
@@ -138,7 +138,7 @@ RSpec.describe Markdast::Inline::Builder do
 
       kinds = child_text_kinds(paragraph_id)
       expect(kinds).to eq([:html_inline])
-      child = arena.first_child(paragraph_id)
+      child = arena.raw_first_child_id(paragraph_id)
       expect(arena.str1(child)).to eq("<span>")
     end
   end
@@ -155,9 +155,9 @@ RSpec.describe Markdast::Inline::Builder do
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:link])
 
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("https://example.com")
-        text = arena.first_child(link)
+        text = arena.raw_first_child_id(link)
         expect(arena.str1(text)).to eq("https://example.com")
       end
     end
@@ -170,9 +170,9 @@ RSpec.describe Markdast::Inline::Builder do
                     start_byte: 0, end_byte: source.bytesize, str1: "a@b.example")
         builder.build(paragraph_id, tokens)
 
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("mailto:a@b.example")
-        text = arena.first_child(link)
+        text = arena.raw_first_child_id(link)
         expect(arena.str1(text)).to eq("a@b.example")
       end
     end
@@ -195,8 +195,8 @@ RSpec.describe Markdast::Inline::Builder do
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:text, :code_span, :text])
 
-        cs = arena.first_child(paragraph_id)
-        cs = arena.next_sibling(cs)
+        cs = arena.raw_first_child_id(paragraph_id)
+        cs = arena.raw_next_sibling_id(cs)
         expect(arena.str1(cs)).to eq("code")
       end
     end
@@ -210,7 +210,7 @@ RSpec.describe Markdast::Inline::Builder do
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:code_span])
 
-        cs = arena.first_child(paragraph_id)
+        cs = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(cs)).to eq("foo ` bar")
       end
     end
@@ -223,7 +223,7 @@ RSpec.describe Markdast::Inline::Builder do
         builder.build(paragraph_id, tokens)
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:text])
-        expect(arena.text(arena.first_child(paragraph_id))).to eq("a`b")
+        expect(arena.text(arena.raw_first_child_id(paragraph_id))).to eq("a`b")
       end
     end
 
@@ -235,7 +235,7 @@ RSpec.describe Markdast::Inline::Builder do
         builder.build(paragraph_id, tokens)
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:code_span])
-        cs = arena.first_child(paragraph_id)
+        cs = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(cs)).to eq("*foo*")
       end
     end
@@ -257,10 +257,10 @@ RSpec.describe Markdast::Inline::Builder do
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:link])
 
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("https://example.com")
         expect(child_text_kinds(link)).to eq([:text])
-        text = arena.first_child(link)
+        text = arena.raw_first_child_id(link)
         expect(arena.text(text)).to eq("foo")
       end
     end
@@ -271,7 +271,7 @@ RSpec.describe Markdast::Inline::Builder do
       it "stores destination in str1 and title in str2" do
         lex(source)
         builder.build(paragraph_id, tokens)
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("https://example.com")
         expect(arena.str2(link)).to eq("t")
       end
@@ -285,7 +285,7 @@ RSpec.describe Markdast::Inline::Builder do
         builder.build(paragraph_id, tokens)
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:text])
-        expect(arena.text(arena.first_child(paragraph_id))).to eq("foo]bar")
+        expect(arena.text(arena.raw_first_child_id(paragraph_id))).to eq("foo]bar")
       end
     end
 
@@ -298,9 +298,9 @@ RSpec.describe Markdast::Inline::Builder do
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:image])
 
-        img = arena.first_child(paragraph_id)
+        img = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(img)).to eq("https://img.test/x.png")
-        text = arena.first_child(img)
+        text = arena.raw_first_child_id(img)
         expect(arena.text(text)).to eq("alt")
       end
     end
@@ -311,7 +311,7 @@ RSpec.describe Markdast::Inline::Builder do
       it "produces a LINK with an empty destination" do
         lex(source)
         builder.build(paragraph_id, tokens)
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("")
       end
     end
@@ -334,7 +334,7 @@ RSpec.describe Markdast::Inline::Builder do
       it "resolves the reference and emits a LINK" do
         lex(source)
         builder.build(paragraph_id, tokens)
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("https://ref.example")
         expect(arena.str2(link)).to eq("T")
       end
@@ -346,7 +346,7 @@ RSpec.describe Markdast::Inline::Builder do
       it "uses the reference label, not the anchor text, for lookup" do
         lex(source)
         builder.build(paragraph_id, tokens)
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("https://ref.example")
       end
     end
@@ -357,7 +357,7 @@ RSpec.describe Markdast::Inline::Builder do
       it "uses the anchor label when the secondary label is empty" do
         lex(source)
         builder.build(paragraph_id, tokens)
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(arena.str1(link)).to eq("https://ref.example")
       end
     end
@@ -388,10 +388,10 @@ RSpec.describe Markdast::Inline::Builder do
         lex(source)
         builder.build(paragraph_id, tokens)
         expect(child_text_kinds(paragraph_id)).to eq([:text, :emphasis, :text])
-        em = arena.first_child(paragraph_id)
-        em = arena.next_sibling(em)
+        em = arena.raw_first_child_id(paragraph_id)
+        em = arena.raw_next_sibling_id(em)
         expect(child_text_kinds(em)).to eq([:text])
-        expect(arena.text(arena.first_child(em))).to eq("foo")
+        expect(arena.text(arena.raw_first_child_id(em))).to eq("foo")
       end
     end
 
@@ -413,11 +413,11 @@ RSpec.describe Markdast::Inline::Builder do
         builder.build(paragraph_id, tokens)
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:text, :emphasis, :text])
-        em = arena.first_child(paragraph_id)
-        em = arena.next_sibling(em)
+        em = arena.raw_first_child_id(paragraph_id)
+        em = arena.raw_next_sibling_id(em)
         expect(child_text_kinds(em)).to eq([:strong])
-        st = arena.first_child(em)
-        expect(arena.text(arena.first_child(st))).to eq("bar")
+        st = arena.raw_first_child_id(em)
+        expect(arena.text(arena.raw_first_child_id(st))).to eq("bar")
       end
     end
 
@@ -438,7 +438,7 @@ RSpec.describe Markdast::Inline::Builder do
         lex(source)
         builder.build(paragraph_id, tokens)
         # the `*` survives as TEXT (its provisional node is released)
-        text = arena.first_child(paragraph_id)
+        text = arena.raw_first_child_id(paragraph_id)
         expect(arena.type(text)).to eq(Markdast::NodeType::TEXT)
       end
     end
@@ -451,7 +451,7 @@ RSpec.describe Markdast::Inline::Builder do
         builder.build(paragraph_id, tokens)
         kinds = child_text_kinds(paragraph_id)
         expect(kinds).to eq([:emphasis])
-        em = arena.first_child(paragraph_id)
+        em = arena.raw_first_child_id(paragraph_id)
         # The interior should contain TEXT and a CODE_SPAN (no nested emphasis)
         interior_kinds = child_text_kinds(em)
         expect(interior_kinds).to include(:code_span)
@@ -466,10 +466,10 @@ RSpec.describe Markdast::Inline::Builder do
         lex(source)
         builder.build(paragraph_id, tokens)
         expect(child_text_kinds(paragraph_id)).to eq([:link])
-        link = arena.first_child(paragraph_id)
+        link = arena.raw_first_child_id(paragraph_id)
         expect(child_text_kinds(link)).to eq([:emphasis])
-        em = arena.first_child(link)
-        expect(arena.text(arena.first_child(em))).to eq("foo")
+        em = arena.raw_first_child_id(link)
+        expect(arena.text(arena.raw_first_child_id(em))).to eq("foo")
       end
     end
   end

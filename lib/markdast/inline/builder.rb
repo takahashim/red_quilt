@@ -134,7 +134,7 @@ module Markdast
                          @source.byteslice(start_byte, end_byte - start_byte).to_s
                        end
 
-        last = @arena.last_child(@parent_id)
+        last = @arena.raw_last_child_id(@parent_id)
         if last != -1 && @arena.type(last) == NodeType::TEXT &&
            !@provisional_nodes[last] && can_coalesce?(last, start_byte)
           coalesce_text(last, materialized, start_byte, end_byte)
@@ -189,7 +189,7 @@ module Markdast
       end
 
       def strip_trailing_spaces(count)
-        last = @arena.last_child(@parent_id)
+        last = @arena.raw_last_child_id(@parent_id)
         return if last == -1 || @arena.type(last) != NodeType::TEXT
 
         lit = @arena.str1(last)
@@ -385,8 +385,8 @@ module Markdast
 
         @arena.insert_before(@parent_id, opener.node_id, link_id)
 
-        first_inside = @arena.next_sibling(opener.node_id)
-        last_inside = @arena.last_child(@parent_id)
+        first_inside = @arena.raw_next_sibling_id(opener.node_id)
+        last_inside = @arena.raw_last_child_id(@parent_id)
         if first_inside != -1 && last_inside != -1 && first_inside != link_id
           @arena.reparent(link_id, first_inside, last_inside)
         end
@@ -549,14 +549,14 @@ module Markdast
           end
           emphasis_id = add_arena_node(kind, opener_match_start, closer_match_end)
 
-          first_inside = @arena.next_sibling(opener_node)
-          last_inside = @arena.prev_sibling(closer_node)
+          first_inside = @arena.raw_next_sibling_id(opener_node)
+          last_inside = @arena.raw_prev_sibling_id(closer_node)
           if first_inside != -1 && last_inside != -1 &&
              first_inside != closer_node && last_inside != opener_node
             @arena.reparent(emphasis_id, first_inside, last_inside)
           end
 
-          parent_id = @arena.parent(opener_node)
+          parent_id = @arena.raw_parent_id(opener_node)
           @arena.insert_before(parent_id, closer_node, emphasis_id)
 
           if opener.count == strength
