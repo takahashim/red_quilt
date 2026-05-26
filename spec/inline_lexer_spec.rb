@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-RSpec.describe Markdast::Inline::Lexer do
+RSpec.describe Mdarena::Inline::Lexer do
   let(:source) { "hello" }
   let(:lexer) { described_class.new(source) }
-  let(:tokens) { Markdast::Inline::Tokens.new }
+  let(:tokens) { Mdarena::Inline::Tokens.new }
 
   describe "#lex_into" do
     it "accepts a tokens storage and a byte range without raising" do
@@ -21,7 +21,7 @@ RSpec.describe Markdast::Inline::Lexer do
 
   def lex(source, range_start: 0, range_end: nil)
     range_end ||= source.bytesize
-    tokens = Markdast::Inline::Tokens.new
+    tokens = Mdarena::Inline::Tokens.new
     described_class.new(source).lex_into(tokens, range_start, range_end)
     tokens
   end
@@ -29,7 +29,7 @@ RSpec.describe Markdast::Inline::Lexer do
   def token_summary(tokens)
     tokens.each_id.map do |id|
       {
-        kind: Markdast::Inline::TokenKind.name(tokens.kind(id)),
+        kind: Mdarena::Inline::TokenKind.name(tokens.kind(id)),
         range: [tokens.start_byte(id), tokens.end_byte(id)],
         str1: tokens.str1(id)
       }
@@ -71,7 +71,7 @@ RSpec.describe Markdast::Inline::Lexer do
 
     it "records trailing-space count for hardbreak detection" do
       result = lex("a   \nb")
-      le_id = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::LINE_ENDING }
+      le_id = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::LINE_ENDING }
       expect(result.int1(le_id)).to eq(3)
     end
   end
@@ -92,7 +92,7 @@ RSpec.describe Markdast::Inline::Lexer do
 
     it "treats `\\\\n` as a hardbreak-style LINE_ENDING with int2 = 1" do
       result = lex("a\\\nb")
-      le_id = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::LINE_ENDING }
+      le_id = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::LINE_ENDING }
       expect(result.int2(le_id)).to eq(1)
     end
   end
@@ -100,14 +100,14 @@ RSpec.describe Markdast::Inline::Lexer do
   describe "CODE_DELIMITER" do
     it "emits CODE_DELIMITER with run length for a single backtick" do
       result = lex("a`b")
-      cd = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::CODE_DELIMITER }
+      cd = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::CODE_DELIMITER }
       expect(result.int1(cd)).to eq(1)
       expect([result.start_byte(cd), result.end_byte(cd)]).to eq([1, 2])
     end
 
     it "groups consecutive backticks into a single token" do
       result = lex("a```b")
-      cd = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::CODE_DELIMITER }
+      cd = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::CODE_DELIMITER }
       expect(result.int1(cd)).to eq(3)
       expect([result.start_byte(cd), result.end_byte(cd)]).to eq([1, 4])
     end
@@ -116,7 +116,7 @@ RSpec.describe Markdast::Inline::Lexer do
   describe "DELIM_RUN for *" do
     it "emits with can_open and can_close inside a word (foo*bar)" do
       result = lex("foo*bar")
-      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      dr = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::DELIM_RUN }
       expect(result.int1(dr)).to eq("*".ord)
       expect(result.int2(dr)).to eq(1)
       expect(result.int3(dr)).to eq(0b11)
@@ -124,21 +124,21 @@ RSpec.describe Markdast::Inline::Lexer do
 
     it "is only can_open when preceded by whitespace" do
       result = lex("a *b")
-      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      dr = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::DELIM_RUN }
       expect(result.int3(dr) & 0b10).to eq(0b10)
       expect(result.int3(dr) & 0b01).to eq(0)
     end
 
     it "is only can_close when followed by whitespace" do
       result = lex("a* b")
-      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      dr = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::DELIM_RUN }
       expect(result.int3(dr) & 0b10).to eq(0)
       expect(result.int3(dr) & 0b01).to eq(0b01)
     end
 
     it "counts a multi-character run" do
       result = lex("***foo")
-      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      dr = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::DELIM_RUN }
       expect(result.int2(dr)).to eq(3)
       expect([result.start_byte(dr), result.end_byte(dr)]).to eq([0, 3])
     end
@@ -147,13 +147,13 @@ RSpec.describe Markdast::Inline::Lexer do
   describe "DELIM_RUN for _" do
     it "downgrades to TEXT inside a word (foo_bar) since it cannot flank" do
       result = lex("foo_bar")
-      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      dr = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::DELIM_RUN }
       expect(dr).to be_nil
     end
 
     it "opens at the start of a word" do
       result = lex("a _b")
-      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      dr = result.each_id.find { |id| result.kind(id) == Mdarena::Inline::TokenKind::DELIM_RUN }
       expect(result.int3(dr) & 0b10).to eq(0b10)
     end
   end
@@ -161,21 +161,21 @@ RSpec.describe Markdast::Inline::Lexer do
   describe "brackets" do
     it "emits LBRACKET / RBRACKET as single-byte tokens" do
       result = lex("[a]")
-      kinds = result.each_id.map { |id| Markdast::Inline::TokenKind.name(result.kind(id)) }
+      kinds = result.each_id.map { |id| Mdarena::Inline::TokenKind.name(result.kind(id)) }
       expect(kinds).to eq([:lbracket, :text, :rbracket])
     end
 
     it "emits BANG_LBRACKET as a 2-byte token for '!['" do
       result = lex("![alt]")
       first = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(first))).to eq(:bang_lbracket)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(first))).to eq(:bang_lbracket)
       expect([result.start_byte(first), result.end_byte(first)]).to eq([0, 2])
     end
 
     it "emits a lone '!' (not followed by '[') as TEXT" do
       result = lex("!a")
       first = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(first))).to eq(:text)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(first))).to eq(:text)
       expect([result.start_byte(first), result.end_byte(first)]).to eq([0, 1])
     end
   end
@@ -184,14 +184,14 @@ RSpec.describe Markdast::Inline::Lexer do
     it "emits AUTOLINK_URI for <https://example.com>" do
       result = lex("<https://example.com>")
       id = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:autolink_uri)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(id))).to eq(:autolink_uri)
       expect(result.str1(id)).to eq("https://example.com")
     end
 
     it "emits AUTOLINK_EMAIL for <a@b.example>" do
       result = lex("<a@b.example>")
       id = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:autolink_email)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(id))).to eq(:autolink_email)
       expect(result.str1(id)).to eq("a@b.example")
     end
   end
@@ -200,14 +200,14 @@ RSpec.describe Markdast::Inline::Lexer do
     it "emits HTML_INLINE for a recognized tag" do
       result = lex("<span>")
       id = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:html_inline)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(id))).to eq(:html_inline)
       expect(result.str1(id)).to eq("<span>")
     end
 
     it "emits TEXT for an unrecognized '<' followed by non-tag input" do
       result = lex("<>")
       id = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:text)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(id))).to eq(:text)
     end
   end
 
@@ -215,21 +215,21 @@ RSpec.describe Markdast::Inline::Lexer do
     it "emits ENTITY for a named entity and decodes via str1" do
       result = lex("&amp;")
       id = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:entity)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(id))).to eq(:entity)
       expect(result.str1(id)).to eq("&")
     end
 
     it "emits ENTITY for a numeric entity" do
       result = lex("&#65;")
       id = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:entity)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(id))).to eq(:entity)
       expect(result.str1(id)).to eq("A")
     end
 
     it "emits TEXT for an unrecognized '&'" do
       result = lex("&notanentity")
       id = 0
-      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:text)
+      expect(Mdarena::Inline::TokenKind.name(result.kind(id))).to eq(:text)
     end
   end
 end

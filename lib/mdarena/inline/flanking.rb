@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   module Inline
     # CommonMark spec 6.2 flanking delimiter run helpers.
     #

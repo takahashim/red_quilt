@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   module NodeType
     DOCUMENT = 1
     PARAGRAPH = 10

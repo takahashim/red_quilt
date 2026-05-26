@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "benchmark/ips"
-require_relative "../lib/markdast"
+require_relative "../lib/mdarena"
 
 # Baseline fixtures for inline parser performance
 FIXTURES = {
@@ -20,7 +20,7 @@ FIXTURES = {
 
 Benchmark.ips do |x|
   FIXTURES.each do |name, markdown|
-    x.report(name.to_s) { Markdast.parse(markdown) }
+    x.report(name.to_s) { Mdarena.parse(markdown) }
   end
 
   x.compare!

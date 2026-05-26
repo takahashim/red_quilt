@@ -7,7 +7,7 @@
 
 RSpec.describe "Inline emphasis" do
   def render(src)
-    Markdast.render_html(src)
+    Mdarena.render_html(src)
   end
 
   describe "basic asterisk emphasis" do

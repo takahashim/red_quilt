@@ -1,4 +1,4 @@
-# Markdast
+# Mdarena
 
 A pragmatic Markdown document processor for Ruby, with an arena-style AST, source spans, safe-by-default HTML rendering, and optional performance optimizations.
 
@@ -7,7 +7,7 @@ A pragmatic Markdown document processor for Ruby, with an arena-style AST, sourc
 Add this line to your application's Gemfile:
 
 ```ruby
-gem "markdast"
+gem "mdarena"
 ```
 
 ## Quick Start
@@ -15,43 +15,43 @@ gem "markdast"
 ### Parsing and rendering
 
 ```ruby
-require "markdast"
+require "mdarena"
 
 # Parse Markdown to a document
-doc = Markdast.parse("# Hello\n\nThis is **bold**.")
+doc = Mdarena.parse("# Hello\n\nThis is **bold**.")
 html = doc.to_html
 # => "<h1>Hello</h1>\n<p>This is <strong>bold</strong>.</p>\n"
 
 # Or render directly (without building AST)
-html = Markdast.render_html("# Hello\n\n**bold**")
+html = Mdarena.render_html("# Hello\n\n**bold**")
 ```
 
 ### HTML is safe by default
 
 ```ruby
-Markdast.render_html("Hi <em>tag</em>")
+Mdarena.render_html("Hi <em>tag</em>")
 # => "<p>Hi &lt;em&gt;tag&lt;/em&gt;</p>\n"
 
-Markdast.render_html("Hi <em>tag</em>", allow_html: true)
+Mdarena.render_html("Hi <em>tag</em>", allow_html: true)
 # => "<p>Hi <em>tag</em></p>\n"
 ```
 
 ## API Reference
 
-### Markdast module
+### Mdarena module
 
 ```ruby
 # Parse Markdown source into a Document
-doc = Markdast.parse(source, allow_html: false)
+doc = Mdarena.parse(source, allow_html: false)
 
 # Render HTML directly (no AST construction)
-html = Markdast.render_html(source, allow_html: false)
+html = Mdarena.render_html(source, allow_html: false)
 ```
 
 ### Document
 
 ```ruby
-doc = Markdast.parse("# Title\n\nBody")
+doc = Mdarena.parse("# Title\n\nBody")
 
 doc.root              # Root node (NodeRef)
 doc.to_html           # Render as HTML
@@ -129,7 +129,7 @@ loc = map.line_column(byte_offset)
 
 ## CommonMark Compatibility
 
-Markdast supports **v0.31.2** of the CommonMark specification, with some limitations and extensions.
+Mdarena supports **v0.31.2** of the CommonMark specification, with some limitations and extensions.
 
 ### Supported features
 
@@ -166,14 +166,14 @@ Markdast supports **v0.31.2** of the CommonMark specification, with some limitat
 
 ### Security model
 
-Markdast prioritizes **security by default**:
+Mdarena prioritizes **security by default**:
 
 ```ruby
 # Default: All HTML is escaped, dangerous URLs blocked
-Markdast.render_html("<script>alert('xss')</script>")
+Mdarena.render_html("<script>alert('xss')</script>")
 # => "<p>&lt;script&gt;alert('xss')&lt;/script&gt;</p>"
 
-Markdast.render_html("[click](javascript:alert(1))")
+Mdarena.render_html("[click](javascript:alert(1))")
 # => "<p><a href=\"\">click</a></p>"
 ```
 
@@ -191,7 +191,7 @@ All other schemes (`javascript:`, `data:`, `vbscript:`, etc.) are blocked by rep
 
 ```ruby
 # Allow raw HTML (use with trusted input only)
-Markdast.render_html(user_markdown, allow_html: true)
+Mdarena.render_html(user_markdown, allow_html: true)
 
 # This passes HTML blocks and inline tags through unchanged
 ```
@@ -201,7 +201,7 @@ Markdast.render_html(user_markdown, allow_html: true)
 ### Extract all headings
 
 ```ruby
-doc = Markdast.parse(source)
+doc = Mdarena.parse(source)
 headings = doc.root.find_all(:heading)
 
 headings.each do |node|
@@ -214,7 +214,7 @@ end
 ### Walk the AST with line numbers
 
 ```ruby
-doc = Markdast.parse(source)
+doc = Mdarena.parse(source)
 
 doc.root.walk do |node|
   loc = node.source_location
@@ -227,7 +227,7 @@ end
 ### Export and transform
 
 ```ruby
-doc = Markdast.parse("# Title\n\nBody with [link](/url)")
+doc = Mdarena.parse("# Title\n\nBody with [link](/url)")
 ast = doc.to_ast
 
 # Print AST structure (for debugging)

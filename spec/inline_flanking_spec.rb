@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Markdast::Inline::Flanking do
+RSpec.describe Mdarena::Inline::Flanking do
   describe ".whitespace?" do
     it "treats nil (line edge) as whitespace" do
       expect(described_class.whitespace?(nil)).to be(true)

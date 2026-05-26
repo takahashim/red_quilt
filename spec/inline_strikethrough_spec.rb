@@ -8,7 +8,7 @@
 
 RSpec.describe "GFM strikethrough" do
   def render(src)
-    Markdast.render_html(src)
+    Mdarena.render_html(src)
   end
 
   it "wraps a simple run in <del>" do

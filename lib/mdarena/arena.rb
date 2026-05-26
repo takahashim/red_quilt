@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   # Parallel-array storage for AST nodes.
   #
   # Each node has a single integer id (its position in the columns).

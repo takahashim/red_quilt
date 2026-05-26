@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   class Document
     attr_reader :source, :arena, :root_id
 

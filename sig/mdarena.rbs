@@ -1,4 +1,4 @@
-module Markdast
+module Mdarena
   VERSION: String
 
   def self.parse: (String source, ?allow_html: bool) -> Document

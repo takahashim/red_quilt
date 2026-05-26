@@ -2,7 +2,7 @@
 
 require "cgi"
 
-module Markdast
+module Mdarena
   module Renderer
     class HTML
       def initialize(document)

@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require_relative "lib/markdast/version"
+require_relative "lib/mdarena/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "markdast"
-  spec.version = Markdast::VERSION
+  spec.name = "mdarena"
+  spec.version = Mdarena::VERSION
   spec.authors = ["takahashim"]
   spec.email = ["takahashimm@gmail.com"]
 
   spec.summary = "Arena AST based Markdown processor for Ruby"
-  spec.description = "markdast parses Markdown into a low-allocation arena AST and renders safe HTML."
-  spec.homepage = "https://github.com/takahashim/markdast"
+  spec.description = "mdarena parses Markdown into a low-allocation arena AST and renders safe HTML."
+  spec.homepage = "https://github.com/takahashim/mdarena"
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"] = spec.homepage

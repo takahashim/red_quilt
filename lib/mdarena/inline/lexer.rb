@@ -2,7 +2,7 @@
 
 require "cgi"
 
-module Markdast
+module Mdarena
   module Inline
     # Scans a byte range of the document source and emits inline tokens
     # into a caller-owned Tokens storage.

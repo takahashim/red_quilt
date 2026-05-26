@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   module Inline
     # Parallel-array storage for the inline token stream.
     #

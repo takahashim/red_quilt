@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   class SourceSpan
     attr_reader :start_byte, :end_byte
 

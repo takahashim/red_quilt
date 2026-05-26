@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   class BlockParser
     Line = Struct.new(:content, :start_byte, :end_byte, :blank, keyword_init: true)
     ItemLine = Struct.new(:content, :start_byte, :end_byte, :blank, :continuation, keyword_init: true)

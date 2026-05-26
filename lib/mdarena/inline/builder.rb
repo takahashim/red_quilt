@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Markdast
+module Mdarena
   module Inline
     # Consumes a token stream produced by Lexer and adds inline nodes
     # to the arena under parent_id.

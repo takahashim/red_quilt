@@ -700,14 +700,14 @@ RSpec.describe "CommonMark compatibility" do
 
   PASSING_EXAMPLES.each do |example|
     it "matches CommonMark 0.31.2 example #{example[:number]} (#{example[:section]})" do
-      expect(Markdast.render_html(example[:markdown], allow_html: true)).to eq(example[:html])
+      expect(Mdarena.render_html(example[:markdown], allow_html: true)).to eq(example[:html])
     end
   end
 
   KNOWN_GAPS.each do |example|
     it "does not yet match CommonMark 0.31.2 example #{example[:number]} (#{example[:section]})" do
       pending(example[:reason])
-      expect(Markdast.render_html(example[:markdown], allow_html: true)).to eq(example[:html])
+      expect(Mdarena.render_html(example[:markdown], allow_html: true)).to eq(example[:html])
     end
   end
 end

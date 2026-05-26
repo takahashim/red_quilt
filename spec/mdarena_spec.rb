@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-RSpec.describe Markdast do
+RSpec.describe Mdarena do
   describe ".parse" do
     it "returns a document with traversable root children" do
       doc = described_class.parse("# Title\n\nBody")
 
-      expect(doc).to be_a(Markdast::Document)
+      expect(doc).to be_a(Mdarena::Document)
       expect(doc.root.type).to eq(:document)
       expect(doc.root.children.map(&:type)).to eq([:heading, :paragraph])
     end
@@ -93,7 +93,7 @@ RSpec.describe Markdast do
       heading = doc.root.children.first
 
       expect(heading.text).to eq("Hello")
-      expect(heading.source_span).to eq(Markdast::SourceSpan.new(2, 7))
+      expect(heading.source_span).to eq(Mdarena::SourceSpan.new(2, 7))
     end
 
     it "tracks source spans for inline nodes parsed from source-backed content" do
@@ -101,9 +101,9 @@ RSpec.describe Markdast do
       heading = doc.root.children.first
       text, emphasis = heading.children
 
-      expect(text.source_span).to eq(Markdast::SourceSpan.new(2, 8))
-      expect(emphasis.source_span).to eq(Markdast::SourceSpan.new(8, 15))
-      expect(emphasis.children.first.source_span).to eq(Markdast::SourceSpan.new(9, 14))
+      expect(text.source_span).to eq(Mdarena::SourceSpan.new(2, 8))
+      expect(emphasis.source_span).to eq(Mdarena::SourceSpan.new(8, 15))
+      expect(emphasis.children.first.source_span).to eq(Mdarena::SourceSpan.new(9, 14))
     end
 
     it "finds nodes by type through the AST wrapper" do
@@ -118,26 +118,26 @@ RSpec.describe Markdast do
 
       expect(doc.to_ast).to eq({
         type: :document,
-        source_span: Markdast::SourceSpan.new(0, 44),
+        source_span: Mdarena::SourceSpan.new(0, 44),
         children: [
           {
             type: :heading,
-            source_span: Markdast::SourceSpan.new(2, 15),
+            source_span: Mdarena::SourceSpan.new(2, 15),
             attributes: { level: 1, text: "Hello world" },
             children: [
               {
                 type: :text,
-                source_span: Markdast::SourceSpan.new(2, 8),
+                source_span: Mdarena::SourceSpan.new(2, 8),
                 attributes: { text: "Hello " },
                 children: []
               },
               {
                 type: :emphasis,
-                source_span: Markdast::SourceSpan.new(8, 15),
+                source_span: Mdarena::SourceSpan.new(8, 15),
                 children: [
                   {
                     type: :text,
-                    source_span: Markdast::SourceSpan.new(9, 14),
+                    source_span: Mdarena::SourceSpan.new(9, 14),
                     attributes: { text: "world" },
                     children: []
                   }
@@ -147,17 +147,17 @@ RSpec.describe Markdast do
           },
           {
             type: :paragraph,
-            source_span: Markdast::SourceSpan.new(17, 44),
+            source_span: Mdarena::SourceSpan.new(17, 44),
             attributes: { text: "site" },
             children: [
               {
                 type: :link,
-                source_span: Markdast::SourceSpan.new(17, 44),
+                source_span: Mdarena::SourceSpan.new(17, 44),
                 attributes: { destination: "https://example.com", title: nil, text: "site" },
                 children: [
                   {
                     type: :text,
-                    source_span: Markdast::SourceSpan.new(18, 22),
+                    source_span: Mdarena::SourceSpan.new(18, 22),
                     attributes: { text: "site" },
                     children: []
                   }
@@ -175,22 +175,22 @@ RSpec.describe Markdast do
 
       expect(heading.to_h).to eq({
         type: :heading,
-        source_span: Markdast::SourceSpan.new(2, 15),
+        source_span: Mdarena::SourceSpan.new(2, 15),
         attributes: { level: 1, text: "Hello world" },
         children: [
           {
             type: :text,
-            source_span: Markdast::SourceSpan.new(2, 8),
+            source_span: Mdarena::SourceSpan.new(2, 8),
             attributes: { text: "Hello " },
             children: []
           },
           {
             type: :emphasis,
-            source_span: Markdast::SourceSpan.new(8, 15),
+            source_span: Mdarena::SourceSpan.new(8, 15),
             children: [
               {
                 type: :text,
-                source_span: Markdast::SourceSpan.new(9, 14),
+                source_span: Mdarena::SourceSpan.new(9, 14),
                 attributes: { text: "world" },
                 children: []
               }

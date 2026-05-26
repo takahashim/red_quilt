@@ -1,10 +1,10 @@
-# Markdast Performance Benchmarks
+# Mdarena Performance Benchmarks
 
 ## v1.2.0 Inline pipeline redesign (2026-05-26, Ruby 4.0.5)
 
 **Environment**: Ruby 4.0.5, Apple Silicon (M-series)
 
-**Methodology**: `benchmark-ips` (5s warmup + measurement), `Markdast.parse()`
+**Methodology**: `benchmark-ips` (5s warmup + measurement), `Mdarena.parse()`
 
 **Pipeline changes since v1.1.0**:
 - InlineParser / InlineScanner replaced by a two-stage Inline::Lexer +
@@ -50,7 +50,7 @@ Notes:
 
 **Environment**: Ruby 3.4.1, Apple Silicon
 
-**Methodology**: `benchmark-ips` (5s warmup + measurement), `Markdast.parse()`
+**Methodology**: `benchmark-ips` (5s warmup + measurement), `Mdarena.parse()`
 
 **Optimizations applied**:
 - Regex-based `scan_text()` (replaces per-char array search)
@@ -88,7 +88,7 @@ short_paragraph          10,391     96.24 μs      1.0x (baseline)
 
 **Environment**: Ruby 3.4.1, Apple Silicon
 
-**Methodology**: `benchmark-ips` (5s warmup + measurement), `Markdast.parse()`
+**Methodology**: `benchmark-ips` (5s warmup + measurement), `Mdarena.parse()`
 
 ### Results
 

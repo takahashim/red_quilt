@@ -1,13 +1,13 @@
-# Markdast Roadmap
+# Mdarena Roadmap
 
 ## Current Status
 
-`markdast` は v1 コア実装を完了しています。現在は CommonMark 互換性の底上げと、AST/renderer の厳密化フェーズに入っています。
+`mdarena` は v1 コア実装を完了しています。現在は CommonMark 互換性の底上げと、AST/renderer の厳密化フェーズに入っています。
 
 完了済み:
 
 - Arena AST と `NodeRef` ベースの公開 API
-- `Markdast.parse` / `Markdast.render_html`
+- `Mdarena.parse` / `Mdarena.render_html`
 - `Document#root` / `#to_html` / `#to_ast`
 - block parser
   - paragraph
