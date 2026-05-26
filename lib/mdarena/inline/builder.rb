@@ -52,6 +52,11 @@ module Mdarena
       def initialize(arena, source, references, track_source: true, diagnostics: nil)
         @arena = arena
         @source = source
+        # Binary view of the source for String#byteindex hot paths:
+        # byteindex on a UTF-8 string raises when the byte offset falls
+        # inside a multibyte sequence; the binary view treats every byte
+        # as its own character.
+        @source_b = source.b
         @references = references
         @track_source = track_source
         @diagnostics = diagnostics
@@ -244,24 +249,26 @@ module Mdarena
       # source bytes directly. CommonMark: backslash escapes do not
       # apply inside a code span, so once we're past the opener every
       # backtick run is a real candidate (token-level ESCAPED_CHAR is
-      # ignored).
+      # ignored). byteindex jumps over non-backtick byte stretches at
+      # C speed.
       def resolve_code_span(opener_id)
         run_len = @tokens.int1(opener_id)
         pos = @tokens.end_byte(opener_id)
-        while pos < @source.bytesize
-          if @source.getbyte(pos) == 0x60
-            run_start = pos
-            pos += 1 while pos < @source.bytesize && @source.getbyte(pos) == 0x60
-            if pos - run_start == run_len
-              emit_code_span_bytes(opener_id, run_start, pos)
-              return next_token_after(pos, opener_id + 1)
-            end
-          else
-            pos += 1
+        bytesize = @source_b.bytesize
+        while pos < bytesize
+          run_start = @source_b.byteindex(BACKTICK_BYTE, pos)
+          break if run_start.nil?
+          pos = run_start + 1
+          pos += 1 while pos < bytesize && @source_b.getbyte(pos) == 0x60
+          if pos - run_start == run_len
+            emit_code_span_bytes(opener_id, run_start, pos)
+            return next_token_after(pos, opener_id + 1)
           end
         end
         nil
       end
+
+      BACKTICK_BYTE = "`".b.freeze
 
       def emit_code_span_bytes(opener_id, closer_start_byte, closer_end_byte)
         body_start = @tokens.end_byte(opener_id)
