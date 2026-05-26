@@ -36,14 +36,32 @@ module Mdarena
       a.freeze
     end
 
+    # parse_lines returns true if it encountered a blank line BETWEEN
+    # two block-level constructs at this scope. parse_list uses that to
+    # decide an item's looseness — the spec says an item is loose when
+    # it "directly contains two block-level elements with a blank line
+    # between them", and ref-defs / fence openers that don't emit an
+    # arena child still count as block-level elements.
+    #
+    # `seen_block` guards against treating the empty marker line of a
+    # list item (e.g. `-` alone) as a blank "between" anything: the
+    # blank only counts after at least one real block has been emitted.
     def parse_lines(parent_id, lines, transformed:)
+      saw_blank = false
+      seen_block = false
+      blank_then_block = false
       index = 0
       while index < lines.length
         line = lines[index]
         if line.blank
+          saw_blank = true if seen_block
           index += 1
           next
         end
+
+        blank_then_block = true if saw_blank
+        saw_blank = false
+        seen_block = true
 
         content = line.content
         if paragraph_only_line?(content)
@@ -78,6 +96,7 @@ module Mdarena
           index = parse_paragraph(parent_id, lines, index, transformed)
         end
       end
+      blank_then_block
     end
 
     # Returns true when `content` cannot start any non-paragraph block,
@@ -213,15 +232,22 @@ module Mdarena
 
         item_lines, index = collect_list_item(lines, index, match)
         end_byte = item_lines.last.end_byte
-        # Blank lines inside an item make the list loose, EXCEPT:
-        # - the very first line (empty marker, e.g. `-` alone)
-        # - blanks inside a fenced code block (they belong to the code)
-        loose ||= item_blank_makes_loose?(item_lines)
         item_id = @arena.add_node(NodeType::LIST_ITEM,
                                   source_start: item_lines.first.start_byte,
                                   source_len: item_lines.last.end_byte - item_lines.first.start_byte)
         @arena.append_child(list_id, item_id)
-        parse_lines(item_id, item_lines, transformed: true)
+        # CommonMark: an item is loose when "two block-level elements
+        # with a blank line between them" appear at its top level.
+        # parse_lines reports that directly — a blank line followed by
+        # ANY block-level construct it processed at this scope. That
+        # captures cases the arena walk would miss (a ref-def after a
+        # blank line consumes a line but emits no arena child).
+        #
+        # NB: must NOT collapse into `loose ||= parse_lines(...)` — if
+        # `loose` is already true from a previous iteration, `||=` would
+        # skip the call and the item would never receive its children.
+        item_blank_between_blocks = parse_lines(item_id, item_lines, transformed: true)
+        loose = true if item_blank_between_blocks
 
         blank_count = 0
         while index < lines.length && lines[index].blank
@@ -234,6 +260,11 @@ module Mdarena
           if next_match && same_list_group?(first_match, next_match)
             loose = true
           else
+            # Rewind so the caller's parse_lines sees the blank line.
+            # When this parse_list was itself processing an item's
+            # continuation lines, the caller needs the blank to detect
+            # "blank between block-level elements" → loose-makes-item.
+            index -= blank_count
             break
           end
         end
@@ -289,14 +320,17 @@ module Mdarena
           item_lines.concat(pending_blanks)
           pending_blanks = []
           stripped_content = strip_columns(current.content, n)
-          # When strip_columns synthesizes spaces for a partially-
-          # consumed tab, the byte length of leading whitespace can
-          # change; compute the new start_byte against the original
-          # text rather than assuming `n` bytes were dropped.
-          strip_bytes = current.content.bytesize - stripped_content.bytesize
+          # When strip_columns synthesises spaces for a partially-
+          # consumed tab, the result can be longer than the original
+          # bytes — pretending we "consumed bytes" then yields a bogus
+          # negative offset. Keep start_byte at the original line start
+          # so downstream source-range arithmetic stays monotonic.
+          ws_bytes = leading_ws_bytes(current.content)
+          start_advance = [ws_bytes, current.content.bytesize - stripped_content.bytesize].min
+          start_advance = 0 if start_advance.negative?
           item_lines << ItemLine.new(
             content: stripped_content,
-            start_byte: current.start_byte + strip_bytes,
+            start_byte: current.start_byte + start_advance,
             end_byte: current.end_byte,
             blank: false,
             continuation: true
@@ -372,24 +406,6 @@ module Mdarena
       expected[:ordered] == actual[:ordered] && expected[:marker] == actual[:marker]
     end
 
-    def item_blank_makes_loose?(item_lines)
-      in_fence = false
-      fence_char = nil
-      fence_count = 0
-      item_lines.each_with_index do |line, idx|
-        content = line.content
-        if !in_fence && (fence = fenced_code_start(content))
-          in_fence = true
-          fence_char = fence[:char]
-          fence_count = fence[:count]
-        elsif in_fence && fenced_code_close?(content, fence_char, fence_count)
-          in_fence = false
-        elsif line.blank && !in_fence && idx > 0
-          return true
-        end
-      end
-      false
-    end
 
     def parse_fenced_code(parent_id, lines, index, fence, transformed)
       start_line = lines[index]
@@ -683,6 +699,18 @@ module Mdarena
     # Strips up to `max` leading 0x20 bytes from `text`. Returns the
     # original string when nothing changed, so callers avoid an
     # allocation in the common no-indent case.
+    # Bytes of literal leading 0x20 / 0x09 in `text`.
+    def leading_ws_bytes(text)
+      i = 0
+      bytes = text.bytesize
+      while i < bytes
+        b = text.getbyte(i)
+        break unless b == 0x20 || b == 0x09
+        i += 1
+      end
+      i
+    end
+
     def strip_leading_spaces(text, max)
       return text if max <= 0
       bytes = text.bytesize
