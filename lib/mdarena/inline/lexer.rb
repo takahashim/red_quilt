@@ -27,7 +27,7 @@ module Mdarena
       URI_AUTOLINK_RE = /\G<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
       EMAIL_AUTOLINK_RE = /\G<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
       HTML_TAG_RE = %r{\G</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
-      ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/.freeze
+      ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/.freeze
 
       def initialize(source)
         @source = source
@@ -210,11 +210,20 @@ module Mdarena
           @pos = m.end(0)
           tokens.emit(TokenKind::ENTITY,
                       start_byte: start, end_byte: @pos,
-                      str1: CGI.unescapeHTML(m[0]))
+                      str1: decode_entity(m[0]))
         else
           @pos += 1
           tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
         end
+      end
+
+      # Decodes a single entity reference. Beyond CGI.unescapeHTML's
+      # XML-5 set, this layer handles:
+      # - U+0000: replaced with U+FFFD per CommonMark spec
+      # - leaves unknown named entities as the raw `&name;` text
+      def decode_entity(raw)
+        decoded = CGI.unescapeHTML(raw)
+        decoded.tr("\u0000", "\uFFFD")
       end
 
       # Returns a MatchData for a \G-anchored regex applied at @pos, or nil

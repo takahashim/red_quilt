@@ -280,6 +280,8 @@ RSpec.describe "CommonMark compatibility" do
     { number: 18, section: "Backslash escapes", markdown: "    \\[\\]\n", html: "<pre><code>\\[\\]\n</code></pre>\n" },
     { number: 19, section: "Backslash escapes", markdown: "~~~\n\\[\\]\n~~~\n", html: "<pre><code>\\[\\]\n</code></pre>\n" },
     { number: 21, section: "Backslash escapes", markdown: "<a href=\"/bar\\/)\">\n", html: "<a href=\"/bar\\/)\">\n" },
+    { number: 26, section: "Entity and numeric character references", markdown: "&#35; &#1234; &#992; &#0;\n", html: "<p># Ӓ Ϡ �</p>\n" },
+    { number: 27, section: "Entity and numeric character references", markdown: "&#X22; &#XD06; &#xcab;\n", html: "<p>&quot; ആ ಫ</p>\n" },
     { number: 28, section: "Entity and numeric character references", markdown: "&nbsp &x; &#; &#x;\n&#87654321;\n&#abcdef0;\n&ThisIsNotDefined; &hi?;\n", html: "<p>&amp;nbsp &amp;x; &amp;#; &amp;#x;\n&amp;#87654321;\n&amp;#abcdef0;\n&amp;ThisIsNotDefined; &amp;hi?;</p>\n" },
     { number: 29, section: "Entity and numeric character references", markdown: "&copy\n", html: "<p>&amp;copy</p>\n" },
     { number: 30, section: "Entity and numeric character references", markdown: "&MadeUpEntity;\n", html: "<p>&amp;MadeUpEntity;</p>\n" },
