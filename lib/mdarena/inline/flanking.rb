@@ -13,6 +13,20 @@ module Mdarena
       # currency / math / other symbols form delimiter-run boundaries.
       UNICODE_PUNCT_RE = /\A[\p{P}\p{S}]\z/.freeze
 
+      # Fast-path lookup tables for ASCII bytes. Flanking inputs are mostly
+      # single-byte ASCII; the tables let us skip regex matches entirely
+      # on the hot path.
+      ASCII_WHITESPACE = Array.new(128, false)
+      [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20].each { |b| ASCII_WHITESPACE[b] = true }
+      ASCII_WHITESPACE.freeze
+
+      ASCII_PUNCT = Array.new(128, false)
+      (0x21..0x2F).each { |b| ASCII_PUNCT[b] = true }
+      (0x3A..0x40).each { |b| ASCII_PUNCT[b] = true }
+      (0x5B..0x60).each { |b| ASCII_PUNCT[b] = true }
+      (0x7B..0x7E).each { |b| ASCII_PUNCT[b] = true }
+      ASCII_PUNCT.freeze
+
       module_function
 
       # Returns the character immediately before the byte position, or nil
@@ -20,46 +34,54 @@ module Mdarena
       def char_before(source, byte_pos, range_start)
         return nil if byte_pos <= range_start
 
-        # Walk back at most 4 bytes to find a UTF-8 code point start.
-        i = byte_pos - 1
+        prev = byte_pos - 1
+        b = source.getbyte(prev)
+        # ASCII fast path: 1-byte chr (avoids byteslice).
+        return b.chr if b < 0x80
+
+        # Walk back at most 4 bytes to find the UTF-8 code point start.
+        i = prev
         while i >= range_start && i > byte_pos - 4
           b = source.getbyte(i)
-          # Code point start: ASCII (0xxxxxxx) or 11xxxxxx
           if b < 0x80 || b >= 0xC0
-            return source.byteslice(i, byte_pos - i)
+      return source.byteslice(i, byte_pos - i)
           end
           i -= 1
         end
         nil
       end
 
-      # Returns the character at the byte position, or nil if past range_end.
       def char_at(source, byte_pos, range_end)
         return nil if byte_pos >= range_end
 
         b = source.getbyte(byte_pos)
-        len = if b < 0x80
-                1
-              elsif b < 0xC0
-                # mid-sequence byte; should not happen at a code point start
-                1
-              elsif b < 0xE0
-                2
-              elsif b < 0xF0
-                3
-              else
-                4
-              end
+        return b.chr if b < 0x80
+
+        len = if b < 0xC0
+          1
+        elsif b < 0xE0
+          2
+        elsif b < 0xF0
+          3
+        else
+          4
+        end
         source.byteslice(byte_pos, [len, range_end - byte_pos].min)
       end
 
       def whitespace?(char)
-        return true if char.nil? # line start / line end count as whitespace
+        return true if char.nil?
+        if char.bytesize == 1
+          return ASCII_WHITESPACE[char.getbyte(0)]
+        end
         UNICODE_WHITESPACE_RE.match?(char)
       end
 
       def punctuation?(char)
         return false if char.nil?
+        if char.bytesize == 1
+          return ASCII_PUNCT[char.getbyte(0)]
+        end
         UNICODE_PUNCT_RE.match?(char)
       end
 
