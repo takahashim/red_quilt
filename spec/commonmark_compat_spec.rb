@@ -740,6 +740,12 @@ RSpec.describe "CommonMark compatibility" do
     { number: 242, section: "Block quotes", markdown: "> foo\n\n> bar\n", html: "<blockquote>\n<p>foo</p>\n</blockquote>\n<blockquote>\n<p>bar</p>\n</blockquote>\n" },
     { number: 247, section: "Block quotes", markdown: "> bar\nbaz\n", html: "<blockquote>\n<p>bar\nbaz</p>\n</blockquote>\n" },
     { number: 252, section: "Block quotes", markdown: ">     code\n\n>    not code\n", html: "<blockquote>\n<pre><code>code\n</code></pre>\n</blockquote>\n<blockquote>\n<p>not code</p>\n</blockquote>\n" },
+    { number: 485, section: "Links", markdown: "[link]()\n", html: "<p><a href=\"\">link</a></p>\n" },
+    { number: 486, section: "Links", markdown: "[link](<>)\n", html: "<p><a href=\"\">link</a></p>\n" },
+    { number: 487, section: "Links", markdown: "[]()\n", html: "<p><a href=\"\"></a></p>\n" },
+    { number: 567, section: "Links", markdown: "[foo]()\n\n[foo]: /url1\n", html: "<p><a href=\"\">foo</a></p>\n" },
+    { number: 579, section: "Images", markdown: "My ![foo bar](/path/to/train.jpg  \"title\"   )\n", html: "<p>My <img src=\"/path/to/train.jpg\" alt=\"foo bar\" title=\"title\" /></p>\n" },
+    { number: 580, section: "Images", markdown: "![foo](<url>)\n", html: "<p><img src=\"url\" alt=\"foo\" /></p>\n" },
   ].freeze
 
   KNOWN_GAPS = [

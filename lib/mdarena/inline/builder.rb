@@ -333,7 +333,7 @@ module Mdarena
 
         body = @source.byteslice(body_start, index - body_start).to_s
         destination, title = split_destination_and_title(body)
-        return nil if destination.nil? || destination.empty?
+        return nil if destination.nil?
 
         { end_byte: index + 1, destination: destination, title: title }
       end
@@ -422,8 +422,18 @@ module Mdarena
       end
 
       def split_destination_and_title(body)
-        match = /\A(\S+)\s+"([^"]*)"\z/.match(body)
-        return [match[1], match[2]] if match
+        # Angle-bracketed destination: <...> with optional title.
+        # The angle brackets are stripped from the destination value.
+        if (m = /\A\s*<([^<>\n]*)>(?:\s+"([^"]*)")?\s*\z/.match(body))
+          return [m[1], m[2]]
+        end
+
+        # Raw destination + double-quoted title.
+        if (m = /\A\s*(\S+)\s+"([^"]*)"\s*\z/.match(body))
+          return [m[1], m[2]]
+        end
+
+        # Just a destination (possibly empty after trimming).
         [body.strip, nil]
       end
 
