@@ -871,6 +871,7 @@ RSpec.describe "CommonMark compatibility" do
     { number: 210, section: "Link reference definitions", markdown: "[foo]: /url\n\"title\" ok\n", html: "<p>&quot;title&quot; ok</p>\n" },
     { number: 250, section: "Block quotes", markdown: "> > > foo\nbar\n", html: "<blockquote>\n<blockquote>\n<blockquote>\n<p>foo\nbar</p>\n</blockquote>\n</blockquote>\n</blockquote>\n" },
     { number: 251, section: "Block quotes", markdown: ">>> foo\n> bar\n>>baz\n", html: "<blockquote>\n<blockquote>\n<blockquote>\n<p>foo\nbar\nbaz</p>\n</blockquote>\n</blockquote>\n</blockquote>\n" },
+    { number: 292, section: "List items", markdown: "> 1. > Blockquote\ncontinued here.\n", html: "<blockquote>\n<ol>\n<li>\n<blockquote>\n<p>Blockquote\ncontinued here.</p>\n</blockquote>\n</li>\n</ol>\n</blockquote>\n" },
   ].freeze
 
   KNOWN_GAPS = [].freeze

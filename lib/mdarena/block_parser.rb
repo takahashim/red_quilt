@@ -110,15 +110,24 @@ module Mdarena
     # extended by a subsequent lazy-continuation line). Anything that
     # would start another block type is rejected.
     # Like paragraph_eligible_line?, but transparently peels any number
-    # of leading blockquote prefixes first. Used to detect that a `>`-
-    # only chain still has an open paragraph at the deepest level.
+    # of leading wrapper prefixes (blockquote `>` and list item markers)
+    # to find out whether the innermost block is still paragraph
+    # content. Used so `> > > foo\nbar` and `> 1. > foo\nbar` both let
+    # the unprefixed line lazily continue the deepest paragraph.
     def paragraph_eligible_through_blockquotes?(content)
       c = content
-      while blockquote_line?(c)
-        m = /\A {0,3}> ?/.match(c)
-        break unless m
-        c = c[m[0].length..]
-        return false if c.strip.empty?
+      loop do
+        if blockquote_line?(c)
+          m = /\A {0,3}> ?/.match(c)
+          break unless m
+          c = c[m[0].length..]
+          return false if c.strip.empty?
+        elsif (li = list_item_start(c))
+          c = li[:content]
+          return false if c.strip.empty?
+        else
+          break
+        end
       end
       paragraph_eligible_line?(c)
     end
