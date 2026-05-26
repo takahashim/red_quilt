@@ -2,14 +2,14 @@
 
 module Markdast
   class InlineScanner
-    SPECIAL = ["*", "_", "`", "[", "]", "(", ")", "!", "<", "&", "\\", "\n"].freeze
+    SPECIAL_RE = /[*_`\[\]()!<&\\\n]/.freeze
 
     def initialize(text)
       @text = text
       @index = 0
     end
 
-    attr_reader :index
+    attr_reader :index, :text
 
     def eof?
       @index >= @text.length
@@ -26,9 +26,33 @@ module Markdast
     end
 
     def scan_text
-      start = @index
-      @index += 1 while @index < @text.length && !SPECIAL.include?(@text[@index])
-      @text[start...@index]
+      rest = @text.index(SPECIAL_RE, @index) || @text.length
+      chunk = @text[@index...rest]
+      @index = rest
+      chunk
+    end
+
+    def char_before
+      @index.positive? ? @text[@index - 1] : nil
+    end
+
+    def char_at(offset)
+      @text[@index + offset]
+    end
+
+    def match_at(regex)
+      @text.match(regex, @index)
+    end
+
+    def rindex_from(delimiter)
+      dlen = delimiter.length
+      last = nil
+      i = @index
+      while i <= @text.length - dlen
+        last = i - @index if @text[i, dlen] == delimiter
+        i += 1
+      end
+      last
     end
 
     def remaining

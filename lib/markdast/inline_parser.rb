@@ -98,7 +98,7 @@ module Markdast
     end
 
     def parse_triple_emphasis(parent_id, delimiter, start_index)
-      closing = @scanner.remaining.rindex(delimiter)
+      closing = @scanner.rindex_from(delimiter)
       return append_text(parent_id, delimiter, start_index: start_index, end_index: @scanner.index, literal: true) unless closing
 
       content = @scanner.advance(closing)
@@ -139,8 +139,7 @@ module Markdast
     end
 
     def parse_html_inline(parent_id, start_index)
-      source = @scanner.remaining
-      if (autolink = uri_autolink(source))
+      if (autolink = uri_autolink)
         @scanner.advance(autolink[:raw].length)
         node_id = @arena.add_node(NodeType::LINK, **source_attributes(start_index, @scanner.index), str1: autolink[:destination])
         @arena.append_child(parent_id, node_id)
@@ -148,7 +147,7 @@ module Markdast
         return
       end
 
-      if (autolink = email_autolink(source))
+      if (autolink = email_autolink)
         @scanner.advance(autolink[:raw].length)
         node_id = @arena.add_node(NodeType::LINK, **source_attributes(start_index, @scanner.index), str1: "mailto:#{autolink[:email]}")
         @arena.append_child(parent_id, node_id)
@@ -156,16 +155,17 @@ module Markdast
         return
       end
 
-      match = html_tag_match(source)
+      match = html_tag_match
       return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless match
 
       @scanner.advance(match[0].length)
       @arena.append_child(parent_id, @arena.add_node(NodeType::HTML_INLINE, **source_attributes(start_index, @scanner.index), str1: match[0]))
     end
 
+    ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/.freeze
+
     def parse_entity(parent_id, start_index)
-      source = @scanner.remaining
-      match = /\A&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/.match(source)
+      match = @scanner.match_at(ENTITY_RE)
       return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless match
 
       @scanner.advance(match[0].length)
@@ -282,8 +282,8 @@ module Markdast
     def emphasis_underscore_open?
       return false unless @scanner.peek == "_"
 
-      prev_char = @scanner.index.zero? ? nil : @scanner.instance_eval { @text[@index - 1] }
-      next_char = @scanner.instance_eval { @text[@index + 1] }
+      prev_char = @scanner.char_before
+      next_char = @scanner.char_at(1)
       !(word_char?(prev_char) && word_char?(next_char))
     end
 
@@ -299,67 +299,64 @@ module Markdast
       label.to_s.strip.downcase.gsub(/[ \t\r\n]+/, " ")
     end
 
-    def uri_autolink(source)
-      match = /\A<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.match(source)
-      return unless match
+    URI_AUTOLINK_RE = /\G<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
 
+    def uri_autolink
+      match = @scanner.match_at(URI_AUTOLINK_RE)
+      return unless match
       { raw: match[0], destination: match[1], label: match[1] }
     end
 
-    def email_autolink(source)
-      match = /\A<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.match(source)
-      return unless match
+    EMAIL_AUTOLINK_RE = /\G<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
+    HTML_TAG_RE = %r{\G</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
 
+    def email_autolink
+      match = @scanner.match_at(EMAIL_AUTOLINK_RE)
+      return unless match
       { raw: match[0], email: match[1] }
     end
 
-    def html_tag_match(source)
-      %r{\A</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}.match(source)
+    def html_tag_match
+      @scanner.match_at(HTML_TAG_RE)
     end
 
     def find_emphasis_closing(delimiter, type)
-      source = @scanner.remaining
-      return source.rindex(delimiter) unless type == NodeType::EMPHASIS && delimiter.length == 1
-
-      candidates = valid_single_delimiter_indices(source, delimiter)
-      candidates.find do |candidate|
-        inside = source[0...candidate]
-        valid_single_delimiter_indices(inside, delimiter).length.even? &&
-          valid_double_delimiter_count(inside, delimiter).even?
-      end || candidates.last
-    end
-
-    def valid_single_delimiter_indices(source, delimiter)
-      indexes = []
-      index = 0
-      while index < source.length
-        if source[index] == delimiter
-          prev_same = index.positive? && source[index - 1] == delimiter
-          next_same = index + 1 < source.length && source[index + 1] == delimiter
-          indexes << index unless prev_same || next_same
-        end
-        index += 1
+      unless type == NodeType::EMPHASIS && delimiter.length == 1
+        return @scanner.rindex_from(delimiter)
       end
-      indexes
-    end
 
-    def valid_double_delimiter_count(source, delimiter)
-      count = 0
-      index = 0
-      pair = delimiter * 2
-      while index < source.length - 1
-        if source[index, 2] == pair
-          prev_same = index.positive? && source[index - 1] == delimiter
-          next_same = index + 2 < source.length && source[index + 2] == delimiter
-          unless prev_same || next_same
-            count += 1
-            index += 2
-            next
+      d = delimiter
+      text = @scanner.text
+      len = text.length
+      base = @scanner.index
+      i = base
+      single_count = 0
+      double_count = 0
+      last_valid = nil
+
+      while i < len
+        if text[i] == d
+          prev_same = i > base && text[i - 1] == d
+          next_same = i + 1 < len && text[i + 1] == d
+          if !prev_same && next_same
+            pair_next2 = i + 2 < len && text[i + 2] == d
+            unless pair_next2
+              double_count += 1
+              i += 2
+              next
+            end
+          elsif !prev_same && !next_same
+            if single_count.even? && double_count.even?
+              return i - base
+            end
+            single_count += 1
+            last_valid = i - base
           end
         end
-        index += 1
+        i += 1
       end
-      count
+
+      last_valid
     end
 
     def triple_delimiter_open?
