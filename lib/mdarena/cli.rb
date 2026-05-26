@@ -22,6 +22,7 @@ module Mdarena
     DEFAULTS = {
       format: :html,
       allow_html: false,
+      extended_autolinks: false,
       diagnostics: false,
       diagnostics_only: false,
       standalone: true,
@@ -40,7 +41,9 @@ module Mdarena
       source = read_source(argv, stdin: stdin, stderr: stderr)
       return 1 unless source
 
-      doc = Mdarena.parse(source, allow_html: options[:allow_html])
+      doc = Mdarena.parse(source,
+                          allow_html: options[:allow_html],
+                          extended_autolinks: options[:extended_autolinks])
 
       unless options[:diagnostics_only]
         case options[:format]
@@ -68,6 +71,10 @@ module Mdarena
         end
         opts.on("--allow-html", "Pass raw HTML through to the output") do
           options[:allow_html] = true
+        end
+        opts.on("--extended-autolinks",
+                "Linkify bare URLs and email addresses (GFM)") do
+          options[:extended_autolinks] = true
         end
         opts.on("--[no-]standalone",
                 "Wrap (or not) the rendered HTML in a full document (default: on)") do |v|
