@@ -14,11 +14,42 @@ RSpec.describe Mdarena::CLI do
   end
 
   describe "default invocation (HTML output via stdin)" do
-    it "renders Markdown from stdin to HTML on stdout" do
+    it "renders a full standalone HTML document by default" do
       code, out, err = run([], input: "# Hello\n")
       expect(code).to eq(0)
-      expect(out).to eq("<h1>Hello</h1>\n")
+      expect(out).to start_with("<!DOCTYPE html>\n")
+      expect(out).to include("<title></title>")
+      expect(out).to include("<h1>Hello</h1>")
+      expect(out).to end_with("</html>\n")
       expect(err).to eq("")
+    end
+
+    it "emits only the body fragment with --no-standalone" do
+      code, out, _ = run(["--no-standalone"], input: "# Hello\n")
+      expect(code).to eq(0)
+      expect(out).to eq("<h1>Hello</h1>\n")
+    end
+  end
+
+  describe "standalone options" do
+    it "uses --title for the document title" do
+      code, out, _ = run(["--title", "My Doc"], input: "hi\n")
+      expect(out).to include("<title>My Doc</title>")
+    end
+
+    it "derives the title from the first heading with --auto-title" do
+      code, out, _ = run(["--auto-title"], input: "# Hello world\n\ntext\n")
+      expect(out).to include("<title>Hello world</title>")
+    end
+
+    it "sets the html lang attribute via --lang" do
+      code, out, _ = run(["--lang", "ja"], input: "hi\n")
+      expect(out).to include(%(<html lang="ja">))
+    end
+
+    it "links a stylesheet via --css" do
+      code, out, _ = run(["--css", "/s.css"], input: "hi\n")
+      expect(out).to include(%(<link rel="stylesheet" href="/s.css">))
     end
   end
 
@@ -27,7 +58,7 @@ RSpec.describe Mdarena::CLI do
       Tempfile.open(["cli", ".md"]) do |f|
         f.write("**bold**\n")
         f.flush
-        code, out, _ = run([f.path])
+        code, out, _ = run(["--no-standalone", f.path])
         expect(code).to eq(0)
         expect(out).to eq("<p><strong>bold</strong></p>\n")
       end
@@ -63,13 +94,13 @@ RSpec.describe Mdarena::CLI do
 
   describe "--allow-html" do
     it "passes raw HTML through when --allow-html is set" do
-      code, out, _ = run(["--allow-html"], input: "<span>x</span>\n")
+      code, out, _ = run(["--no-standalone", "--allow-html"], input: "<span>x</span>\n")
       expect(code).to eq(0)
       expect(out).to include("<span>x</span>")
     end
 
     it "escapes raw HTML by default" do
-      code, out, _ = run([], input: "<span>x</span>\n")
+      code, out, _ = run(["--no-standalone"], input: "<span>x</span>\n")
       expect(code).to eq(0)
       expect(out).to include("&lt;span&gt;")
     end
@@ -77,7 +108,7 @@ RSpec.describe Mdarena::CLI do
 
   describe "--diagnostics" do
     it "writes diagnostics to stderr while still rendering HTML" do
-      code, out, err = run(["--diagnostics"], input: "[a](javascript:1)\n")
+      code, out, err = run(["--no-standalone", "--diagnostics"], input: "[a](javascript:1)\n")
       expect(code).to eq(0)
       expect(out).to include("<a href=\"\">a</a>")
       expect(err).to include("unsafe_url")

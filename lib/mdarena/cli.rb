@@ -23,7 +23,12 @@ module Mdarena
       format: :html,
       allow_html: false,
       diagnostics: false,
-      diagnostics_only: false
+      diagnostics_only: false,
+      standalone: true,
+      auto_title: false,
+      title: nil,
+      lang: "en",
+      css: nil
     }.freeze
 
     FORMATS = %i[html ast].freeze
@@ -40,7 +45,7 @@ module Mdarena
       unless options[:diagnostics_only]
         case options[:format]
         when :html
-          stdout.write(doc.to_html)
+          stdout.write(render_html(doc, options))
         when :ast
           require "pp"
           PP.pp(doc.to_ast, stdout)
@@ -63,6 +68,23 @@ module Mdarena
         end
         opts.on("--allow-html", "Pass raw HTML through to the output") do
           options[:allow_html] = true
+        end
+        opts.on("--[no-]standalone",
+                "Wrap (or not) the rendered HTML in a full document (default: on)") do |v|
+          options[:standalone] = v
+        end
+        opts.on("--auto-title",
+                "Use the first heading's text as <title> (standalone only)") do
+          options[:auto_title] = true
+        end
+        opts.on("--title TITLE", "Explicit <title> text (standalone only)") do |t|
+          options[:title] = t
+        end
+        opts.on("--lang LANG", "html lang attribute (standalone only; default \"en\")") do |l|
+          options[:lang] = l
+        end
+        opts.on("--css URL", "Add a stylesheet link (standalone only)") do |u|
+          options[:css] = u
         end
         opts.on("--diagnostics", "Also print diagnostics to stderr") do
           options[:diagnostics] = true
@@ -105,6 +127,17 @@ module Mdarena
         stderr.puts "mdarena: too many arguments: #{argv.inspect}"
         nil
       end
+    end
+
+    def self.render_html(doc, options)
+      title = options[:title]
+      title = doc.first_heading_text.to_s if title.nil? && options[:auto_title]
+      doc.to_html(
+        standalone: options[:standalone],
+        title: title,
+        lang: options[:lang],
+        css: options[:css]
+      )
     end
 
     def self.write_diagnostics(diagnostics, stderr)

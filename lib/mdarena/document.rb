@@ -24,12 +24,29 @@ module Mdarena
       NodeRef.new(self, @root_id)
     end
 
-    def to_html
-      Renderer::HTML.new(self).render
+    # Renders the document to HTML.
+    #
+    # standalone: when true, wrap the rendered body in a `<!DOCTYPE html>`
+    #   template with `<head>` (charset / title / optional stylesheet)
+    #   and `<body>`. When false (the default), only the rendered body
+    #   fragment is returned.
+    # title / lang / css: applied only when standalone is true.
+    def to_html(standalone: false, title: nil, lang: "en", css: nil)
+      body = Renderer::HTML.new(self).render
+      return body unless standalone
+
+      wrap_standalone_html(body, title: title.to_s, lang: lang.to_s, css: css)
     end
 
     def to_ast
       root.to_h
+    end
+
+    # Returns the plain-text content of the first HEADING in the
+    # document, or nil if there is no heading. Used by callers (e.g. the
+    # CLI's --auto-title) to derive a document title.
+    def first_heading_text
+      first_heading_text_walk(@root_id)
     end
 
     def source_map
@@ -41,6 +58,66 @@ module Mdarena
     # entries appear here without further calls.
     def diagnostics
       @diagnostics ||= []
+    end
+
+    private
+
+    def wrap_standalone_html(body, title:, lang:, css:)
+      out = +"<!DOCTYPE html>\n"
+      out << %(<html lang="#{html_escape_attr(lang)}">\n)
+      out << "<head>\n"
+      out << %(<meta charset="utf-8">\n)
+      out << "<title>#{html_escape_text(title)}</title>\n"
+      out << %(<link rel="stylesheet" href="#{html_escape_attr(css)}">\n) if css
+      out << "</head>\n<body>\n"
+      out << body
+      out << "</body>\n</html>\n"
+      out
+    end
+
+    def html_escape_text(str)
+      str.to_s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
+    end
+
+    def html_escape_attr(str)
+      html_escape_text(str).gsub('"', "&quot;")
+    end
+
+    def first_heading_text_walk(node_id)
+      return nil if node_id == -1
+      if @arena.type(node_id) == NodeType::HEADING
+        return collect_plain_text(node_id)
+      end
+      child = @arena.raw_first_child_id(node_id)
+      while child != -1
+        text = first_heading_text_walk(child)
+        return text if text
+        child = @arena.raw_next_sibling_id(child)
+      end
+      nil
+    end
+
+    def collect_plain_text(node_id)
+      out = +""
+      collect_plain_text_walk(node_id, out)
+      out
+    end
+
+    def collect_plain_text_walk(node_id, out)
+      case @arena.type(node_id)
+      when NodeType::TEXT
+        out << @arena.text(node_id).to_s
+      when NodeType::CODE_SPAN
+        out << @arena.str1(node_id).to_s
+      when NodeType::SOFTBREAK, NodeType::HARDBREAK
+        out << " "
+      else
+        child = @arena.raw_first_child_id(node_id)
+        while child != -1
+          collect_plain_text_walk(child, out)
+          child = @arena.raw_next_sibling_id(child)
+        end
+      end
     end
   end
 end
