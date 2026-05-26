@@ -80,6 +80,10 @@ module Markdast
           @out << "<strong>"
           render_children(node_id)
           @out << "</strong>"
+        when NodeType::STRIKETHROUGH
+          @out << "<del>"
+          render_children(node_id)
+          @out << "</del>"
         when NodeType::CODE_SPAN
           @out << "<code>#{CGI.escapeHTML(@arena.text(node_id).to_s)}</code>"
         when NodeType::LINK

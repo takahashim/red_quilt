@@ -16,7 +16,8 @@ module Markdast
       # token.
       SPECIAL_BYTES = begin
         a = Array.new(256, false)
-        [0x2A, 0x5F, 0x60, 0x5B, 0x5D, 0x21, 0x3C, 0x26, 0x5C, 0x0A].each { |b| a[b] = true }
+        # *, _, `, [, ], !, <, &, \, \n, ~ (GFM strikethrough)
+        [0x2A, 0x5F, 0x60, 0x5B, 0x5D, 0x21, 0x3C, 0x26, 0x5C, 0x0A, 0x7E].each { |b| a[b] = true }
         a.freeze
       end
 
@@ -58,6 +59,8 @@ module Markdast
             scan_delim_run(tokens, "*", 0x2A)
           when 0x5F # _
             scan_delim_run(tokens, "_", 0x5F)
+          when 0x7E # ~ (GFM strikethrough)
+            scan_delim_run(tokens, "~", 0x7E)
           when 0x5B # [
             scan_one_byte_token(tokens, TokenKind::LBRACKET)
           when 0x5D # ]

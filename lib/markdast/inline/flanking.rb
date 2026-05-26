@@ -76,8 +76,9 @@ module Markdast
 
       # Returns [can_open, can_close] for a delimiter run.
       #
-      # char must be either "*" or "_". For "_", word-character adjacency
-      # rules apply on top of the flanking rules.
+      # char must be "*", "_", or "~". For "_", word-character adjacency
+      # rules apply on top of the flanking rules; "*" and "~" use plain
+      # flanking only.
       def can_open_close(char, prev_char, next_char)
         left = left_flanking?(prev_char, next_char)
         right = right_flanking?(prev_char, next_char)

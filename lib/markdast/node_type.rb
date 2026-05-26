@@ -24,6 +24,7 @@ module Markdast
     LINK = 106
     IMAGE = 107
     HTML_INLINE = 109
+    STRIKETHROUGH = 111
 
     TYPE_NAMES = {
       DOCUMENT => :document,
@@ -46,7 +47,8 @@ module Markdast
       CODE_SPAN => :code_span,
       LINK => :link,
       IMAGE => :image,
-      HTML_INLINE => :html_inline
+      HTML_INLINE => :html_inline,
+      STRIKETHROUGH => :strikethrough
     }.freeze
 
     module_function

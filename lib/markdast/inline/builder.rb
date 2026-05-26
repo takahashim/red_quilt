@@ -466,7 +466,7 @@ module Markdast
       end
 
       def process_emphasis(stack)
-        openers_bottom = { "*" => -1, "_" => -1 }
+        openers_bottom = { "*" => -1, "_" => -1, "~" => -1 }
         closer_idx = 0
 
         while closer_idx < stack.length
@@ -507,7 +507,18 @@ module Markdast
 
           opener = stack[opener_idx]
           strength = [opener.count, closer.count].min >= 2 ? 2 : 1
-          kind = strength == 2 ? NodeType::STRONG : NodeType::EMPHASIS
+          if closer.char == "~"
+            # GFM strikethrough only forms on `~~` runs. A single `~`
+            # leaves the delimiter as text; advance the cursor so future
+            # `~~` pairs can still match.
+            if strength < 2
+              closer_idx += 1
+              next
+            end
+            kind = NodeType::STRIKETHROUGH
+          else
+            kind = strength == 2 ? NodeType::STRONG : NodeType::EMPHASIS
+          end
 
           # CommonMark spec: any delimiters strictly between this opener and
           # closer can't open or close anything in this scope, so drop them
