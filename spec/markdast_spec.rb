@@ -302,6 +302,22 @@ RSpec.describe Markdast do
       expect(location).to be_a(Hash) if location
     end
 
+    it "reports source_location columns in characters, not bytes" do
+      # "日本語" is 3 characters (9 bytes in UTF-8).
+      # "**強調**" starts at character column 3 (byte 9).
+      source = "日本語**強調**テスト"
+      doc = described_class.parse(source)
+
+      strong = doc.root.walk.find { |n| n.type == :strong }
+      expect(strong).not_to be_nil
+
+      loc = strong.source_location
+      expect(loc[:start_line]).to eq(1)
+      expect(loc[:start_column]).to eq(3)
+      # "**強調**" is 6 characters, so end_column should be 3 + 6 = 9
+      expect(loc[:end_column]).to eq(9)
+    end
+
     it "sanitizes unsafe URL schemes" do
       # javascript: should be blocked
       doc = described_class.parse('[link](javascript:alert(1))')

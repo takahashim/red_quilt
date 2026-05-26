@@ -9,7 +9,9 @@ module Markdast
 
     def line_column(byte_offset)
       line = (@line_starts.bsearch_index { |s| s > byte_offset } || @line_starts.length) - 1
-      { line: line + 1, column: byte_offset - @line_starts[line] }
+      line_start = @line_starts[line]
+      column = @source.byteslice(line_start, byte_offset - line_start).to_s.length
+      { line: line + 1, column: column }
     end
 
     private

@@ -77,7 +77,7 @@ node.source_span      # SourceSpan with start_byte, end_byte
 
 # Position information (line/column)
 node.source_location  # { start_line, start_column, end_line, end_column }
-                      # line: 1-indexed, column: 0-indexed
+                      # line: 1-indexed, column: 0-indexed (character-based)
 
 # AST export
 node.to_h             # Export subtree as Hash[Symbol, untyped]
