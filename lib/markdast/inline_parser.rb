@@ -29,7 +29,7 @@ module Markdast
           parse_line_break(parent_id, start_index)
         elsif @scanner.peek == "\\" && @scanner.peek(2) == "\\\n"
           @scanner.advance(2)
-          @arena.append_child(parent_id, @arena.add_node(NodeType::HARDBREAK, **source_attributes(start_index, @scanner.index), str1: "\n"))
+          @arena.append_child(parent_id, @arena.add_node(NodeType::HARDBREAK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: "\n"))
         elsif triple_delimiter_open?
           parse_triple_emphasis(parent_id, @scanner.advance(3), start_index)
         elsif @scanner.peek == "`"
@@ -58,7 +58,7 @@ module Markdast
     def parse_line_break(parent_id, start_index)
       @scanner.advance(1)
       break_type = trim_trailing_spaces_for_hardbreak(parent_id) ? NodeType::HARDBREAK : NodeType::SOFTBREAK
-      @arena.append_child(parent_id, @arena.add_node(break_type, **source_attributes(start_index, @scanner.index), str1: "\n"))
+      @arena.append_child(parent_id, @arena.add_node(break_type, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: "\n"))
     end
 
     def parse_code_span(parent_id, start_index)
@@ -73,7 +73,7 @@ module Markdast
             raw_content = @scanner.text_slice(content_start, run_start)
             @arena.append_child(
               parent_id,
-              @arena.add_node(NodeType::CODE_SPAN, **source_attributes(start_index, @scanner.index), str1: normalize_code_span(raw_content))
+              @arena.add_node(NodeType::CODE_SPAN, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: normalize_code_span(raw_content))
             )
             return
           end
@@ -91,7 +91,7 @@ module Markdast
 
       content = @scanner.advance(closing)
       @scanner.advance(delimiter.length)
-      node_id = @arena.add_node(type, **source_attributes(start_index, @scanner.index))
+      node_id = @arena.add_node(type, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index))
       @arena.append_child(parent_id, node_id)
       child_offset = @base_offset ? @base_offset + start_index + delimiter.length : nil
       self.class.new(@arena, parent_id: node_id, source_text: content, base_offset: child_offset, references: @references).parse
@@ -104,7 +104,7 @@ module Markdast
       content = @scanner.advance(closing)
       @scanner.advance(delimiter.length)
 
-      emphasis_id = @arena.add_node(NodeType::EMPHASIS, **source_attributes(start_index, @scanner.index))
+      emphasis_id = @arena.add_node(NodeType::EMPHASIS, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index))
       @arena.append_child(parent_id, emphasis_id)
 
       strong_id = @arena.add_node(NodeType::STRONG)
@@ -120,7 +120,7 @@ module Markdast
       return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless parts
 
       @scanner.advance(parts[:raw].length)
-      node_id = @arena.add_node(NodeType::LINK, **source_attributes(start_index, @scanner.index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
+      node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
       @arena.append_child(parent_id, node_id)
       child_offset = @base_offset ? @base_offset + start_index + (parts[:raw].start_with?("![") ? 2 : 1) : nil
       self.class.new(@arena, parent_id: node_id, source_text: parts[:label], base_offset: child_offset, references: @references).parse
@@ -132,7 +132,7 @@ module Markdast
       return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless parts
 
       @scanner.advance(parts[:raw].length)
-      node_id = @arena.add_node(NodeType::IMAGE, **source_attributes(start_index, @scanner.index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
+      node_id = @arena.add_node(NodeType::IMAGE, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
       @arena.append_child(parent_id, node_id)
       child_offset = @base_offset ? @base_offset + start_index + 2 : nil
       self.class.new(@arena, parent_id: node_id, source_text: parts[:label], base_offset: child_offset, references: @references).parse
@@ -141,7 +141,7 @@ module Markdast
     def parse_html_inline(parent_id, start_index)
       if (autolink = uri_autolink)
         @scanner.advance(autolink[:raw].length)
-        node_id = @arena.add_node(NodeType::LINK, **source_attributes(start_index, @scanner.index), str1: autolink[:destination])
+        node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: autolink[:destination])
         @arena.append_child(parent_id, node_id)
         @arena.append_child(node_id, @arena.add_node(NodeType::TEXT, str1: autolink[:label]))
         return
@@ -149,7 +149,7 @@ module Markdast
 
       if (autolink = email_autolink)
         @scanner.advance(autolink[:raw].length)
-        node_id = @arena.add_node(NodeType::LINK, **source_attributes(start_index, @scanner.index), str1: "mailto:#{autolink[:email]}")
+        node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: "mailto:#{autolink[:email]}")
         @arena.append_child(parent_id, node_id)
         @arena.append_child(node_id, @arena.add_node(NodeType::TEXT, str1: autolink[:email]))
         return
@@ -159,7 +159,7 @@ module Markdast
       return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless match
 
       @scanner.advance(match[0].length)
-      @arena.append_child(parent_id, @arena.add_node(NodeType::HTML_INLINE, **source_attributes(start_index, @scanner.index), str1: match[0]))
+      @arena.append_child(parent_id, @arena.add_node(NodeType::HTML_INLINE, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: match[0]))
     end
 
     ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/.freeze
@@ -182,9 +182,9 @@ module Markdast
         @arena.update_span(last_child, @arena.source_start(last_child), source_end(end_index)) if @base_offset
       else
         node = if literal || @base_offset.nil?
-                 @arena.add_node(NodeType::TEXT, **source_attributes(start_index, end_index), str1: text)
+                 @arena.add_node(NodeType::TEXT, source_start: src_start(start_index), source_len: src_len(start_index, end_index), str1: text)
                else
-                 @arena.add_node(NodeType::TEXT, **source_attributes(start_index, end_index))
+                 @arena.add_node(NodeType::TEXT, source_start: src_start(start_index), source_len: src_len(start_index, end_index))
                end
         @arena.append_child(parent_id, node)
       end
@@ -377,10 +377,12 @@ module Markdast
       normalized
     end
 
-    def source_attributes(start_index, end_index)
-      return { source_start: -1, source_len: 0 } if @base_offset.nil?
+    def src_start(start_index)
+      @base_offset ? @base_offset + start_index : -1
+    end
 
-      { source_start: @base_offset + start_index, source_len: end_index - start_index }
+    def src_len(start_index, end_index)
+      @base_offset ? end_index - start_index : 0
     end
 
     def source_end(end_index)
