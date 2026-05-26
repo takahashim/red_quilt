@@ -232,10 +232,29 @@ RSpec.describe "CommonMark compatibility" do
       section: "Reference images",
       markdown: "![foo]\n\n[foo]: /url \"title\"\n",
       html: "<p><img src=\"/url\" alt=\"foo\" title=\"title\" /></p>\n"
+    },
+    {
+      number: 197,
+      section: "Link reference definitions",
+      markdown: "[foo]: /url\n\n[foo]\n",
+      html: "<p><a href=\"/url\">foo</a></p>\n"
+    },
+    {
+      number: 226,
+      section: "Block quotes",
+      markdown: "> [foo]: /url\n>\n> [foo]\n",
+      html: "<blockquote>\n<p><a href=\"/url\">foo</a></p>\n</blockquote>\n"
     }
   ].freeze
 
-  KNOWN_GAPS = [].freeze
+  KNOWN_GAPS = [
+    {
+      number: 182,
+      section: "Link reference definitions",
+      markdown: "[foo]: <bar>(baz)\n\n[foo]\n",
+      html: "<p><a href=\"bar(baz)\">foo</a></p>\n"
+    }
+  ].freeze
 
   PASSING_EXAMPLES.each do |example|
     it "matches CommonMark 0.31.2 example #{example[:number]} (#{example[:section]})" do
