@@ -13,7 +13,7 @@ FIXTURES = {
 
   long_paragraph: "Lorem " + ("*ipsum* dolor " * 100) + "sit amet.",
 
-  readme: File.read(File.join(__dir__, "../README.md")),
+  cmark_spec: File.read(File.expand_path("fixtures/cmark_spec-0.31.2.md", __dir__)),
 
   nested_emphasis: "*foo **bar *baz* bim** bop*" * 50,
 
