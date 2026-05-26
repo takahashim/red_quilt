@@ -120,8 +120,7 @@ module Markdast
       end
 
       @arena.update_span(list_id, start_byte, end_byte)
-      @arena.instance_eval { @int3[list_id] = loose ? 0 : 1 }
-      list_id
+      @arena.replace_int3(list_id, loose ? 0 : 1)
       index
     end
 
@@ -351,8 +350,11 @@ module Markdast
         line = lines[index]
         break if line.blank
         break if index > start_index && paragraph_interrupt?(lines, index)
-        break if link_reference_definition(lines, index)
-
+        # NOTE: Per CommonMark, a `[label]: ...` line cannot start a
+        # link reference definition inside an open paragraph — it's
+        # absorbed as paragraph continuation. The dispatch in
+        # parse_lines catches definitions that appear after a blank
+        # line, so we don't need another scan here.
         paragraph_lines << line
         index += 1
       end
@@ -394,13 +396,7 @@ module Markdast
         )
         offset += line.bytesize
       end
-      if source.empty?
-        []
-      elsif source.end_with?("\n")
-        lines
-      else
-        lines
-      end
+      lines
     end
 
     def atx_heading(text)

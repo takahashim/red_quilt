@@ -216,6 +216,10 @@ module Markdast
       @str1[id] = value
     end
 
+    def replace_int3(id, value)
+      @int3[id] = value
+    end
+
     def replace_text(id, value, source_start: @source_start[id], source_len: @source_len[id])
       @str1[id] = value
       @source_start[id] = source_start
