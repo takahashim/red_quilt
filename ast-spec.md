@@ -352,7 +352,52 @@ source_start: byte offset
 source_len: byte length
 ```
 
-RubyのStringはUTF-8文字を含むため、文字数ベースのcolumnは高コストになりやすい。内部処理ではbyte offsetを真の値とし、line/columnは診断表示時にだけ計算する。
+RubyのStringはUTF-8文字を含むため、文字数ベースのcolumnは高コストになりやすい。内部処理ではbyte offsetを真の値とし、line/columnは診断表示時にだけ計算する。なお、外部APIに公開する `column` 自体は文字単位とする（後述）。
+
+### 文字インデックスとバイトオフセットの使い分け
+
+markdastは内部で文字インデックスとバイトオフセットを意図的に使い分ける。
+両者を取り違えるとマルチバイト文字（CJK / Cyrillicなど）でHTMLが壊れる、source spanがずれる、といった事故が発生するため、レイヤーごとに「どちらの単位を使うか」を固定する。
+
+#### レイヤー別の単位
+
+| レイヤー | 単位 | 理由 |
+|----------|------|------|
+| `Arena#source_start` / `source_len` | byte | `String#byteslice` でO(len)に取り出せる |
+| `SourceSpan#start_byte` / `end_byte` | byte | 内部単位をそのまま公開（名前で明示） |
+| `InlineScanner#index` | char | regex match / `String#[]` / scan_text で使う |
+| `InlineScanner#byte_index` | byte | Arena の `source_start` 計算に使う |
+| `SourceMap#line_column` 入力 | byte | byte offset から line/column を逆引き |
+| `node.source_location` の column | char | 編集系ツール・診断表示はユーザーにとって文字単位の方が自然 |
+
+#### なぜこの分け方になるか
+
+Rubyの`String`には2系統のAPIがある。
+
+- 文字単位: `String#[]`, `String#index(regex)`, `String#match`, `String#length`
+- バイト単位: `String#byteslice`, `String#bytesize`, `String#getbyte`
+
+それぞれの性質:
+
+- `byteslice(start, len)` は O(len) で高速。Arena経由のtext取り出しというホットパスはこれが向く
+- 一方、文字インデックスでの`String#[]`はマルチバイト文字を含む場合O(n)になりうる
+- scanner側はregexで `\G`-anchored match を行うため、文字インデックスで進めたい
+
+このため:
+
+- **ホットパス（Arena保存・renderer出力）はbyte**
+- **scannerは文字インデックスで進め、Arena保存時にbyte offsetへ変換**
+- **ユーザー向け診断（column）は文字単位**
+
+という三層になる。
+
+#### コーディングルール
+
+- 変数・引数の単位を**名前で明示**する
+  - byte: `start_byte`, `end_byte`, `byte_offset`, `byte_index`
+  - char: `start_index`, `char_offset`, `index`
+- 単位の変換はscanner経由でしか行わない（`@scanner.byte_index` / `@scanner.index`）
+- マルチバイト文字を含む回帰テストをspecに必ず置き、文字とbyteの混在によるバグを早期検出する（例: `_пристаням_стремятся`, `日本語の*強調*テスト`）
 
 ### SourceMap
 
@@ -394,12 +439,14 @@ end
 ```ruby
 node.source_span
 #=> #<SourceSpan start_byte=10 end_byte=20>
+#   start_byte / end_byte は byte offset
 
 node.source_location
-#=> #<SourceLocation start_line=3 start_column=5 end_line=3 end_column=15>
+#=> { start_line: 3, start_column: 5, end_line: 3, end_column: 15 }
+#   line は 1-indexed, column は 0-indexed の **文字単位** (char)
 ```
 
-`source_location` は毎回計算すると高い可能性があるため、必要時のみ計算する。
+`source_location` は毎回計算するとコストが高い可能性があるため、必要時のみ計算する（SourceMapは`Document`側でメモ化される）。
 
 ## Textノード
 
