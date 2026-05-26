@@ -209,14 +209,21 @@ module Mdarena
           next
         end
 
-        leading_spaces = current.content[/\A */].length
-        if leading_spaces >= n
-          # Indented continuation: flush any held blanks and add the line.
+        # CommonMark: continuation requires the line's leading
+        # whitespace to span at least `n` columns, with tabs expanding
+        # to multiples of 4.
+        if leading_columns(current.content) >= n
           item_lines.concat(pending_blanks)
           pending_blanks = []
+          stripped_content = strip_columns(current.content, n)
+          # When strip_columns synthesizes spaces for a partially-
+          # consumed tab, the byte length of leading whitespace can
+          # change; compute the new start_byte against the original
+          # text rather than assuming `n` bytes were dropped.
+          strip_bytes = current.content.bytesize - stripped_content.bytesize
           item_lines << ItemLine.new(
-            content: current.content[n..],
-            start_byte: current.start_byte + n,
+            content: stripped_content,
+            start_byte: current.start_byte + strip_bytes,
             end_byte: current.end_byte,
             blank: false,
             continuation: true
@@ -345,10 +352,10 @@ module Mdarena
         line = lines[index]
         break unless line.blank || indented_code_line?(line.content)
 
-        # CommonMark: strip up to 4 leading spaces from every line,
-        # including blank lines whose content beyond column 4 must be
-        # preserved verbatim.
-        code_lines << line.content.sub(/\A {1,4}/, "")
+        # CommonMark: strip up to 4 columns of leading whitespace
+        # (tab-aware) from every line, including blank lines whose
+        # content beyond column 4 must be preserved verbatim.
+        code_lines << strip_columns(line.content, 4)
         index += 1
       end
 
@@ -671,14 +678,55 @@ module Mdarena
     end
 
     def strip_blockquote_prefix(line)
-      match = /\A( {0,3}> ?)(.*)\z/.match(line.content)
-      content = match ? match[2] : line.content
-      prefix_len = match ? match[1].bytesize : 0
+      content = line.content
+      bytes = content.bytesize
+      i = 0
+      abs_col = 0
+      # Up to 3 spaces of indent before `>`.
+      while i < 3 && i < bytes && content.getbyte(i) == 0x20
+        i += 1
+        abs_col += 1
+      end
+      unless i < bytes && content.getbyte(i) == 0x3E
+        return Line.new(content: content,
+                        start_byte: line.start_byte,
+                        end_byte: line.end_byte,
+                        blank: !content.match?(/\S/))
+      end
+      i += 1
+      abs_col += 1  # consume `>`
+
+      # Count column width of leading whitespace after `>` using
+      # absolute-column tracking so a tab right after `>` (at col 1)
+      # is correctly billed as only 3 columns of indent, not 4.
+      ws_start_col = abs_col
+      j = i
+      while j < bytes
+        b = content.getbyte(j)
+        if b == 0x20
+          abs_col += 1
+        elsif b == 0x09
+          abs_col = (abs_col / 4 + 1) * 4
+        else
+          break
+        end
+        j += 1
+      end
+      ws_cols = abs_col - ws_start_col
+
+      if ws_cols >= 1
+        tail = (" " * (ws_cols - 1)) + content.byteslice(j..)
+        offset = j
+      else
+        tail = content.byteslice(i..)
+        offset = i
+      end
+
       Line.new(
-        content: content,
-        start_byte: line.start_byte + prefix_len,
+        content: tail,
+        start_byte: line.start_byte + offset,
         end_byte: line.end_byte,
-        blank: content.strip.empty?
+        blank: !tail.match?(/\S/)
       )
     end
 
@@ -719,7 +767,10 @@ module Mdarena
       if (bm = /\A([*+\-])(?:([ \t]+)(.*)|([ \t]*)\z)/.match(rest))
         marker = bm[1]
         if bm[2]
-          spaces_after = bm[2].length
+          # `spaces_after` is column width, not byte length, so a tab
+          # after the marker is billed as the number of cols needed to
+          # reach the next tab stop (CommonMark Tabs section).
+          spaces_after = column_width(bm[2], leading + 1)
           body = bm[3]
         else
           spaces_after = 0
@@ -733,7 +784,7 @@ module Mdarena
         digits = om[1]
         marker = om[2]
         if om[3]
-          spaces_after = om[3].length
+          spaces_after = column_width(om[3], leading + digits.length + 1)
           body = om[4]
         else
           spaces_after = 0
@@ -744,6 +795,21 @@ module Mdarena
       end
 
       nil
+    end
+
+    # Returns the column width of `whitespace` if it begins at the
+    # absolute column `start_col`, expanding tabs to the next tab stop
+    # of 4. `whitespace` must contain only 0x20/0x09 bytes.
+    def column_width(whitespace, start_col)
+      col = start_col
+      whitespace.each_byte do |b|
+        if b == 0x20
+          col += 1
+        elsif b == 0x09
+          col = (col / 4 + 1) * 4
+        end
+      end
+      col - start_col
     end
 
     def build_list_match(leading, marker_width, marker, spaces_after, body, ordered:, start_number:)
@@ -814,7 +880,58 @@ module Mdarena
     end
 
     def indented_code_line?(text)
-      text.start_with?("    ")
+      # CommonMark: 4+ columns of leading whitespace, where tabs expand
+      # virtually to a tab stop of 4 columns.
+      leading_columns(text) >= 4
+    end
+
+    # Returns the column count of leading whitespace, treating tabs as
+    # advancing to the next multiple-of-4 column.
+    def leading_columns(text)
+      col = 0
+      i = 0
+      bytes = text.bytesize
+      while i < bytes
+        b = text.getbyte(i)
+        if b == 0x20
+          col += 1
+        elsif b == 0x09
+          col = (col / 4 + 1) * 4
+        else
+          break
+        end
+        i += 1
+      end
+      col
+    end
+
+    # Strips up to `n` columns of leading whitespace from `text` and
+    # returns the rest. Leading whitespace is normalised to spaces in
+    # the returned string so subsequent strips compose correctly
+    # regardless of where they land relative to the original tab stops.
+    def strip_columns(text, n)
+      return text if n <= 0
+      col = 0
+      i = 0
+      bytes = text.bytesize
+      while i < bytes
+        b = text.getbyte(i)
+        if b == 0x20
+          col += 1
+        elsif b == 0x09
+          col = (col / 4 + 1) * 4
+        else
+          break
+        end
+        i += 1
+      end
+      # text[0...i] is all leading whitespace representing `col` cols.
+      if n >= col
+        i.zero? ? text : text.byteslice(i..)
+      else
+        # Keep the unstripped portion as a run of spaces.
+        (" " * (col - n)) + text.byteslice(i..)
+      end
     end
 
     def html_block_start?(text)

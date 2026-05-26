@@ -856,6 +856,14 @@ RSpec.describe "CommonMark compatibility" do
     { number: 187, section: "HTML blocks", markdown: "Foo\n<a href=\"bar\">\nbaz\n", html: "<p>Foo\n<a href=\"bar\">\nbaz</p>\n" },
     { number: 321, section: "Lists", markdown: "- a\n  > b\n  ```\n  c\n  ```\n- d\n", html: "<ul>\n<li>a\n<blockquote>\n<p>b</p>\n</blockquote>\n<pre><code>c\n</code></pre>\n</li>\n<li>d</li>\n</ul>\n" },
     { number: 318, section: "Lists", markdown: "- a\n- ```\n  b\n\n\n  ```\n- c\n", html: "<ul>\n<li>a</li>\n<li>\n<pre><code>b\n\n\n</code></pre>\n</li>\n<li>c</li>\n</ul>\n" },
+    { number: 1, section: "Tabs", markdown: "\tfoo\tbaz\t\tbim\n", html: "<pre><code>foo\tbaz\t\tbim\n</code></pre>\n" },
+    { number: 2, section: "Tabs", markdown: "  \tfoo\tbaz\t\tbim\n", html: "<pre><code>foo\tbaz\t\tbim\n</code></pre>\n" },
+    { number: 4, section: "Tabs", markdown: "  - foo\n\n\tbar\n", html: "<ul>\n<li>\n<p>foo</p>\n<p>bar</p>\n</li>\n</ul>\n" },
+    { number: 5, section: "Tabs", markdown: "- foo\n\n\t\tbar\n", html: "<ul>\n<li>\n<p>foo</p>\n<pre><code>  bar\n</code></pre>\n</li>\n</ul>\n" },
+    { number: 6, section: "Tabs", markdown: ">\t\tfoo\n", html: "<blockquote>\n<pre><code>  foo\n</code></pre>\n</blockquote>\n" },
+    { number: 7, section: "Tabs", markdown: "-\t\tfoo\n", html: "<ul>\n<li>\n<pre><code>  foo\n</code></pre>\n</li>\n</ul>\n" },
+    { number: 8, section: "Tabs", markdown: "    foo\n\tbar\n", html: "<pre><code>foo\nbar\n</code></pre>\n" },
+    { number: 9, section: "Tabs", markdown: " - foo\n   - bar\n\t - baz\n", html: "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>baz</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n" },
   ].freeze
 
   KNOWN_GAPS = [].freeze
