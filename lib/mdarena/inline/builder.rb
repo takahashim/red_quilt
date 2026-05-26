@@ -43,11 +43,16 @@ module Mdarena
       # materialized into a separate string, e.g. transformed blockquote
       # lines), source_start/source_len are not recorded; in that mode every
       # text node carries its content in str1 so Arena#text still works.
-      def initialize(arena, source, references, track_source: true)
+      #
+      # diagnostics: an optional Array the builder appends warnings to
+      # (unsafe URL schemes, missing references, ...). The caller — usually
+      # InlinePass — is expected to forward Document#diagnostics here.
+      def initialize(arena, source, references, track_source: true, diagnostics: nil)
         @arena = arena
         @source = source
         @references = references
         @track_source = track_source
+        @diagnostics = diagnostics
       end
 
       def build(parent_id, tokens)
@@ -355,8 +360,18 @@ module Mdarena
           ref_label, after_byte = read_reference_label(start_byte)
           return nil unless after_byte
           lookup = ref_label.empty? ? text_label : ref_label
-          ref = @references[normalize_reference_label(lookup)]
-          return nil unless ref
+          normalized = normalize_reference_label(lookup)
+          ref = @references[normalized]
+          unless ref
+            # Full reference `[text][ref]` with a missing definition is
+            # usually a typo worth surfacing.
+            report_diagnostic(
+              severity: :warning,
+              rule: :missing_reference,
+              message: "Reference #{normalized.inspect} is not defined",
+            )
+            return nil
+          end
           return { end_byte: after_byte, destination: ref[:destination], title: ref[:title] }
         end
 
@@ -453,7 +468,19 @@ module Mdarena
         return destination if scheme.nil?
         return destination if SAFE_SCHEMES.include?(scheme.downcase)
 
+        report_diagnostic(
+          severity: :warning,
+          rule: :unsafe_url,
+          message: "Unsafe URL scheme #{scheme.downcase.inspect} blocked",
+        )
         ""
+      end
+
+      def report_diagnostic(severity:, rule:, message:, source_span: nil)
+        return unless @diagnostics
+        @diagnostics << Diagnostic.new(
+          severity: severity, rule: rule, message: message, source_span: source_span
+        )
       end
 
       def normalize_reference_label(label)

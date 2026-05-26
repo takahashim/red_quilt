@@ -9,7 +9,8 @@ module Mdarena
       @arena = document.arena
       @lexer = Inline::Lexer.new(@document.source)
       @tokens = Inline::Tokens.new
-      @builder = Inline::Builder.new(@arena, @document.source, @document.references)
+      @builder = Inline::Builder.new(@arena, @document.source, @document.references,
+                                     diagnostics: @document.diagnostics)
     end
 
     def apply
@@ -29,7 +30,8 @@ module Mdarena
           # dedicated builder that suppresses span tracking.
           Inline::Lexer.new(literal).lex_into(@tokens, 0, literal.bytesize)
           Inline::Builder.new(@arena, literal, @document.references,
-                              track_source: false).build(node_id, @tokens)
+                              track_source: false,
+                              diagnostics: @document.diagnostics).build(node_id, @tokens)
         else
           start_byte = @arena.source_start(node_id)
           end_byte = start_byte + @arena.source_len(node_id)

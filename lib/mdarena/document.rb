@@ -35,5 +35,12 @@ module Mdarena
     def source_map
       @source_map ||= SourceMap.new(@source)
     end
+
+    # Returns the array of diagnostics collected during parse / render.
+    # The array is mutable and shared with the parser / renderer; new
+    # entries appear here without further calls.
+    def diagnostics
+      @diagnostics ||= []
+    end
   end
 end
