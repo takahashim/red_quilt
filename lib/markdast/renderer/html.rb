@@ -139,7 +139,7 @@ module Markdast
 
       def render_table_row(row_id)
         @out << "<tr>"
-        @arena.child_ids(row_id).each do |cell_id|
+        @arena.each_child(row_id) do |cell_id|
           tag = @arena.int1(cell_id) == 1 ? "th" : "td"
           @out << "<#{tag}>"
           render_children(cell_id)
@@ -164,7 +164,7 @@ module Markdast
 
       def collect_plain_text(node_id)
         text = +""
-        @arena.child_ids(node_id).each do |child_id|
+        @arena.each_child(node_id) do |child_id|
           case @arena.type(child_id)
           when NodeType::TEXT, NodeType::CODE_SPAN
             text << @arena.text(child_id).to_s
