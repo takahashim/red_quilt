@@ -484,7 +484,13 @@ module Mdarena
       end
 
       def process_emphasis(stack)
-        openers_bottom = { "*" => -1, "_" => -1, "~" => -1 }
+        # NB: the CommonMark spec describes an `openers_bottom`
+        # optimization keyed by closer character / length / flanking
+        # flags. Implementing that correctly is subtle (a single
+        # per-character bottom blocks valid matches like
+        # `*foo**bar**baz*`), so the implementation here just walks
+        # back to the start of the stack for every closer. This is
+        # O(stack^2) in the worst case but stacks are tiny in practice.
         closer_idx = 0
 
         while closer_idx < stack.length
@@ -496,7 +502,7 @@ module Mdarena
 
           opener_idx = closer_idx - 1
           found = false
-          while opener_idx > openers_bottom[closer.char]
+          while opener_idx >= 0
             opener = stack[opener_idx]
             if opener.can_open && opener.char == closer.char
               skip = false
@@ -514,7 +520,6 @@ module Mdarena
           end
 
           unless found
-            openers_bottom[closer.char] = closer_idx - 1
             unless closer.can_open
               @provisional_nodes.delete(closer.node_id)
               stack.delete_at(closer_idx)

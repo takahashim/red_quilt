@@ -779,6 +779,10 @@ RSpec.describe "CommonMark compatibility" do
     { number: 296, section: "List items", markdown: "10) foo\n    - bar\n", html: "<ol start=\"10\">\n<li>foo\n<ul>\n<li>bar</li>\n</ul>\n</li>\n</ol>\n" },
     { number: 320, section: "Lists", markdown: "* a\n  > b\n  >\n* c\n", html: "<ul>\n<li>a\n<blockquote>\n<p>b</p>\n</blockquote>\n</li>\n<li>c</li>\n</ul>\n" },
     { number: 323, section: "Lists", markdown: "- a\n  - b\n", html: "<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>\n</ul>\n" },
+    { number: 411, section: "Emphasis and strong emphasis", markdown: "*foo**bar**baz*\n", html: "<p><em>foo<strong>bar</strong>baz</em></p>\n" },
+    { number: 412, section: "Emphasis and strong emphasis", markdown: "*foo**bar*\n", html: "<p><em>foo**bar</em></p>\n" },
+    { number: 415, section: "Emphasis and strong emphasis", markdown: "*foo**bar***\n", html: "<p><em>foo<strong>bar</strong></em></p>\n" },
+    { number: 429, section: "Emphasis and strong emphasis", markdown: "**foo*bar*baz**\n", html: "<p><strong>foo<em>bar</em>baz</strong></p>\n" },
   ].freeze
 
   KNOWN_GAPS = [
