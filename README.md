@@ -38,24 +38,17 @@ Mdarena.render_html("Hi <em>tag</em>", allow_html: true)
 
 ## API Reference
 
-### Mdarena module
-
-```ruby
-# Parse Markdown source into a Document
-doc = Mdarena.parse(source, allow_html: false)
-
-# Render HTML directly (no AST construction)
-html = Mdarena.render_html(source, allow_html: false)
-```
-
 ### Document
 
 ```ruby
 doc = Mdarena.parse("# Title\n\nBody")
 
 doc.root              # Root node (NodeRef)
+doc.walk              # Traverse all nodes (block: { |node| ... } or Enumerator)
 doc.to_html           # Render as HTML
 doc.to_ast            # Export complete AST as Hash
+doc.to_json           # Export as MDAST-compatible JSON
+doc.to_mdast          # Export as MDAST Hash
 doc.source_map        # Line/column lookup (lazy memoized)
 doc.allow_html?       # Check HTML pass-through setting
 ```
@@ -129,9 +122,9 @@ loc = map.line_column(byte_offset)
 
 ## CommonMark Compatibility
 
-Mdarena supports **v0.31.2** of the CommonMark specification, with some limitations and extensions.
+Mdarena achieves 100% compliance with the CommonMark v0.31.2 specification.
 
-### Supported features
+### Fully supported features
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -145,22 +138,63 @@ Mdarena supports **v0.31.2** of the CommonMark specification, with some limitati
 | Lists (ordered/unordered) | ✅ | Tight/loose detection |
 | List items | ✅ | Nested content, continuation rules |
 | Link reference definitions | ✅ | Case/whitespace normalization |
-| Emphasis/Strong | 🔶 | Heuristic-based, not full delimiter-run |
+| Emphasis/Strong | ✅ | Full delimiter-run stack (CommonMark spec 6.2) |
 | Code spans | ✅ | |
 | Links | ✅ | Inline and reference forms |
 | Images | ✅ | Inline and reference forms |
 | Autolinks | ✅ | URI (`<http://...>`) and email (`<user@...>`) |
+| Extended Autolinks | ✅ | GFM: bare URLs and email (enable with `extended_autolinks: true`) |
 | Raw HTML inline | ✅ | Escaped by default, passable with `allow_html: true` |
 | Hard/soft line breaks | ✅ | Two spaces or backslash for hard break |
-| Backslash escapes | 🔶 | Basic implementation |
-| Character references | 🔶 | Partial (HTML5 entities) |
+| Backslash escapes | ✅ | All punctuation escapes supported |
+| Character references | ✅ | Full HTML5 entity support |
 
-### Known limitations (not planned for v1)
+All CommonMark v0.31.2 specification test cases pass without exception.
 
-- **Setext headings** (`Heading\n======`) — underline-style headings
-- **Full delimiter-run emphasis** — currently uses heuristic matching
-- **Some escape sequences** — e.g., punctuation escapes in URL context
-- **Strikethrough** — GFM extension, not implemented yet
+## Command-line Tool
+
+Mdarena ships with a `mdarena` CLI for converting Markdown files to HTML or inspecting the AST.
+
+### Basic usage
+
+```bash
+# Convert Markdown file to HTML
+mdarena input.md > output.html
+
+# Convert from stdin
+echo "# Hello" | mdarena
+
+# Output as AST (for debugging)
+mdarena --format ast input.md
+
+# Output as MDAST-compatible JSON (for external tools)
+mdarena --format json input.md
+
+# Standalone HTML document with title
+mdarena --standalone --title "My Document" input.md
+
+# Enable GFM extended autolinks
+mdarena --extended-autolinks input.md
+```
+
+### Options
+
+```
+--format FORMAT          Output format: html (default), ast, json
+--allow-html             Pass raw HTML through to the output
+--extended-autolinks     Linkify bare URLs and email addresses (GFM)
+--[no-]standalone        Wrap HTML in full document (default: on)
+--auto-title             Use the first heading's text as <title>
+--title TITLE            Explicit <title> text
+--lang LANG              html lang attribute (default: "en")
+--css URL                Add a stylesheet link
+--diagnostics            Print diagnostics to stderr
+--diagnostics-only       Print diagnostics only (suppress output)
+-h, --help               Show help
+-v, --version            Show version
+```
+
+Exit code is 0 on success, 1 if errors are detected.
 
 ## Safe-by-Default HTML Rendering
 
@@ -258,40 +292,20 @@ ruby spec/bench_inline.rb
 
 Profiles parse performance on various Markdown patterns.
 
-## Performance (v1.0.0 baseline)
+## Performance (v1.2.0, Ruby 4.0.5)
 
-See [BENCH.md](BENCH.md) for detailed benchmarks.
+Mdarena achieves **kramdown parity** with the CommonMark compliance to spare.
 
-**Short paragraph**: 6,500 i/s  
-**Long paragraph (1500 chars)**: 37 i/s  
-**Nested emphasis**: 90 i/s  
+**v1.2.0 results** (inline pipeline redesign):
 
-Performance improvements planned for v1.1. See roadmap for details.
-
-## Roadmap
-
-### v1.0 (current)
-
-- ✅ Arena AST with source spans
-- ✅ CommonMark v0.31.2 core features
-- ✅ Safe-by-default HTML rendering
-- ✅ Line/column position tracking
-- ✅ Reference link/image resolution
-
-### v1.1 (planned)
-
-- Parser optimization (inline scanning, emphasis delimiter-run)
-- Performance: 2-3x faster on long documents
-- Baseline: BENCH.md recorded
-
-### Future (post-v1.1)
-
-- Formatter (normalize Markdown to canonical form)
-- Transformer (rebuild AST through builder API)
-- Diagnostics (warnings for missing alts, unsafe URLs, etc.)
-- CLI tool
-- Optional LexerKit backend for native lexing
-- Event-based rendering (fast path for HTML-only)
+| Fixture | i/s | Improvement (v1.0 → v1.2) |
+|---------|-----|--------------------------|
+| Short paragraph | ~25,200 | **3.8x** |
+| Long paragraph | ~1,130 | **30.5x** ✨ |
+| Nested emphasis | ~905 | **10.2x** |
+| Mixed markup | ~885 | **6.6x** |
+| Deep nesting | ~690 | **10.0x** |
+| Many links | ~1,320 | **2.6x** |
 
 ## License
 
