@@ -688,7 +688,23 @@ RSpec.describe "CommonMark compatibility" do
     { number: 646, section: "Hard line breaks", markdown: "### foo\\\n", html: "<h3>foo\\</h3>\n" },
     { number: 647, section: "Hard line breaks", markdown: "### foo  \n", html: "<h3>foo</h3>\n" },
     { number: 651, section: "Textual content", markdown: "Foo χρῆν\n", html: "<p>Foo χρῆν</p>\n" },
-    { number: 652, section: "Textual content", markdown: "Multiple     spaces\n", html: "<p>Multiple     spaces</p>\n" }
+    { number: 652, section: "Textual content", markdown: "Multiple     spaces\n", html: "<p>Multiple     spaces</p>\n" },
+    { number: 59, section: "Thematic breaks", markdown: "Foo\n---\nbar\n", html: "<h2>Foo</h2>\n<p>bar</p>\n" },
+    { number: 80, section: "Setext headings", markdown: "Foo *bar*\n=========\n\nFoo *bar*\n---------\n", html: "<h1>Foo <em>bar</em></h1>\n<h2>Foo <em>bar</em></h2>\n" },
+    { number: 81, section: "Setext headings", markdown: "Foo *bar\nbaz*\n====\n", html: "<h1>Foo <em>bar\nbaz</em></h1>\n" },
+    { number: 82, section: "Setext headings", markdown: "  Foo *bar\nbaz*\t\n====\n", html: "<h1>Foo <em>bar\nbaz</em></h1>\n" },
+    { number: 83, section: "Setext headings", markdown: "Foo\n-------------------------\n\nFoo\n=\n", html: "<h2>Foo</h2>\n<h1>Foo</h1>\n" },
+    { number: 84, section: "Setext headings", markdown: "   Foo\n---\n\n  Foo\n-----\n\n  Foo\n  ===\n", html: "<h2>Foo</h2>\n<h2>Foo</h2>\n<h1>Foo</h1>\n" },
+    { number: 86, section: "Setext headings", markdown: "Foo\n   ----      \n", html: "<h2>Foo</h2>\n" },
+    { number: 90, section: "Setext headings", markdown: "Foo\\\n----\n", html: "<h2>Foo\\</h2>\n" },
+    { number: 91, section: "Setext headings", markdown: "`Foo\n----\n`\n\n<a title=\"a lot\n---\nof dashes\"/>\n", html: "<h2>`Foo</h2>\n<p>`</p>\n<h2>&lt;a title=&quot;a lot</h2>\n<p>of dashes&quot;/&gt;</p>\n" },
+    { number: 95, section: "Setext headings", markdown: "Foo\nBar\n---\n", html: "<h2>Foo\nBar</h2>\n" },
+    { number: 96, section: "Setext headings", markdown: "---\nFoo\n---\nBar\n---\nBaz\n", html: "<hr />\n<h2>Foo</h2>\n<h2>Bar</h2>\n<p>Baz</p>\n" },
+    { number: 102, section: "Setext headings", markdown: "\\> foo\n------\n", html: "<h2>&gt; foo</h2>\n" },
+    { number: 103, section: "Setext headings", markdown: "Foo\n\nbar\n---\nbaz\n", html: "<p>Foo</p>\n<h2>bar</h2>\n<p>baz</p>\n" },
+    { number: 115, section: "Indented code blocks", markdown: "# Heading\n    foo\nHeading\n------\n    foo\n----\n", html: "<h1>Heading</h1>\n<pre><code>foo\n</code></pre>\n<h2>Heading</h2>\n<pre><code>foo\n</code></pre>\n<hr />\n" },
+    { number: 141, section: "Fenced code blocks", markdown: "foo\n---\n~~~\nbar\n~~~\n# baz\n", html: "<h2>foo</h2>\n<pre><code>bar\n</code></pre>\n<h1>baz</h1>\n" },
+    { number: 215, section: "Link reference definitions", markdown: "[foo]: /url\nbar\n===\n[foo]\n", html: "<h1>bar</h1>\n<p><a href=\"/url\">foo</a></p>\n" },
   ].freeze
 
   KNOWN_GAPS = [

@@ -346,9 +346,22 @@ module Mdarena
     def parse_paragraph(parent_id, lines, index, transformed)
       paragraph_lines = []
       start_index = index
+      setext_level = nil
       while index < lines.length
         line = lines[index]
         break if line.blank
+
+        # Setext heading underline: only valid when there is already at
+        # least one paragraph line above it. Checked before
+        # paragraph_interrupt? so that "---" / "===" turns the open
+        # paragraph into a heading instead of being treated as a
+        # thematic break.
+        if paragraph_lines.any? && (level = setext_underline_level(line.content))
+          setext_level = level
+          index += 1
+          break
+        end
+
         break if index > start_index && paragraph_interrupt?(lines, index)
         # NOTE: Per CommonMark, a `[label]: ...` line cannot start a
         # link reference definition inside an open paragraph — it's
@@ -362,12 +375,34 @@ module Mdarena
       text = paragraph_lines.map(&:content).join("\n")
       start_byte = paragraph_lines.first.start_byte
       end_byte = paragraph_lines.last.end_byte
+
+      if setext_level
+        # Setext heading: leading/trailing whitespace on the content
+        # lines is not significant.
+        heading_id = @arena.add_node(NodeType::HEADING,
+                                     source_start: start_byte,
+                                     source_len: end_byte - start_byte,
+                                     int1: setext_level,
+                                     str1: text.strip)
+        @arena.append_child(parent_id, heading_id)
+        return index
+      end
+
       paragraph_id = @arena.add_node(NodeType::PARAGRAPH,
                                      source_start: start_byte,
                                      source_len: end_byte - start_byte,
                                      str1: transformed ? text : nil)
       @arena.append_child(parent_id, paragraph_id)
       index
+    end
+
+    # Returns 1 for `===...` (h1), 2 for `---...` (h2), nil otherwise.
+    # Leading up to 3 spaces of indent and any amount of trailing
+    # whitespace are allowed.
+    def setext_underline_level(text)
+      match = /\A {0,3}(=+|-+)[ \t]*\z/.match(text)
+      return nil unless match
+      match[1].start_with?("=") ? 1 : 2
     end
 
     def paragraph_interrupt?(lines, index)
