@@ -85,8 +85,21 @@ RSpec.describe Mdarena::CLI do
       expect(out).to include(":heading")
     end
 
+    it "prints JSON AST when --format json is given" do
+      code, out, _ = run(["--format", "json"], input: "# H\n")
+      expect(code).to eq(0)
+      require "json"
+      ast = JSON.parse(out)
+      expect(ast).to be_a(Hash)
+      expect(ast["type"]).to eq("root")
+      expect(ast["children"].first["type"]).to eq("heading")
+      expect(ast["children"].first["depth"]).to eq(1)
+      expect(ast["children"].first["position"]).to include("start", "end")
+      expect(ast["children"].first["position"]["start"]).to include("line", "column", "offset")
+    end
+
     it "rejects unknown format values" do
-      code, _, err = run(["--format", "json"], input: "")
+      code, _, err = run(["--format", "xml"], input: "")
       expect(code).to eq(1)
       expect(err).to match(/invalid argument/i)
     end

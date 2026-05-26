@@ -18,5 +18,9 @@ module Mdarena
         other.start_byte == @start_byte &&
         other.end_byte == @end_byte
     end
+
+    def to_h
+      { start_byte: @start_byte, end_byte: @end_byte }
+    end
   end
 end

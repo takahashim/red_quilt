@@ -32,7 +32,7 @@ module Mdarena
       css: nil
     }.freeze
 
-    FORMATS = %i[html ast].freeze
+    FORMATS = %i[html ast json].freeze
 
     def self.run(argv, stdin: $stdin, stdout: $stdout, stderr: $stderr)
       options = parse_options(argv, stderr: stderr)
@@ -52,6 +52,8 @@ module Mdarena
         when :ast
           require "pp"
           PP.pp(doc.to_ast, stdout)
+        when :json
+          stdout.puts doc.to_json
         end
       end
 
@@ -66,7 +68,7 @@ module Mdarena
       options = DEFAULTS.dup
       parser = OptionParser.new do |opts|
         opts.banner = USAGE
-        opts.on("--format FORMAT", FORMATS, "Output format: html (default), ast") do |f|
+        opts.on("--format FORMAT", FORMATS, "Output format: html (default), ast, json") do |f|
           options[:format] = f
         end
         opts.on("--allow-html", "Pass raw HTML through to the output") do
