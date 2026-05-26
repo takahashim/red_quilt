@@ -469,6 +469,9 @@ module Mdarena
       stripped = paragraph_lines.map.with_index do |l, i|
         i.zero? ? l.content.sub(/\A {0,3}/, "") : l.content.sub(/\A[ \t]*/, "")
       end
+      # Trailing whitespace on the last line is dropped (no hard-break
+      # without a following content line).
+      stripped[-1] = stripped[-1].sub(/[ \t]+\z/, "") if stripped.any?
       indent_was_stripped = stripped.zip(paragraph_lines).any? { |s, l| s.length != l.content.length }
       text = stripped.join("\n")
       start_byte = paragraph_lines.first.start_byte

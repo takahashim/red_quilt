@@ -18,6 +18,17 @@ module Mdarena
 
       private
 
+      # CommonMark-compliant HTML escape: only `&`, `<`, `>`, `"` are
+      # rewritten. Apostrophes are left as-is (escape_html on Ruby
+      # 3.0+ rewrites `'` -> `&#39;` which fails CommonMark spec
+      # comparisons).
+      HTML_ESCAPE_TABLE = { "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", '"' => "&quot;" }.freeze
+      HTML_ESCAPE_RE = /[&<>"]/.freeze
+
+      def escape_html(str)
+        str.gsub(HTML_ESCAPE_RE, HTML_ESCAPE_TABLE)
+      end
+
       def render_children(node_id)
         child_id = @arena.raw_first_child_id(node_id)
         until child_id == -1
@@ -58,9 +69,9 @@ module Mdarena
         when NodeType::CODE_BLOCK
           @out << "<pre><code"
           info_word = @arena.str2(node_id).to_s.split.first.to_s
-          @out << %( class="language-#{CGI.escapeHTML(info_word)}") unless info_word.empty?
+          @out << %( class="language-#{escape_html(info_word)}") unless info_word.empty?
           @out << ">"
-          @out << CGI.escapeHTML(@arena.text(node_id).to_s)
+          @out << escape_html(@arena.text(node_id).to_s)
           @out << "</code></pre>\n"
         when NodeType::HTML_BLOCK
           render_raw_html(@arena.text(node_id).to_s, block: true)
@@ -69,7 +80,7 @@ module Mdarena
           render_table(node_id)
           @out << "</table>\n"
         when NodeType::TEXT
-          @out << CGI.escapeHTML(@arena.text(node_id).to_s)
+          @out << escape_html(@arena.text(node_id).to_s)
         when NodeType::SOFTBREAK
           @out << "\n"
         when NodeType::HARDBREAK
@@ -87,9 +98,9 @@ module Mdarena
           render_children(node_id)
           @out << "</del>"
         when NodeType::CODE_SPAN
-          @out << "<code>#{CGI.escapeHTML(@arena.text(node_id).to_s)}</code>"
+          @out << "<code>#{escape_html(@arena.text(node_id).to_s)}</code>"
         when NodeType::LINK
-          dest = CGI.escapeHTML(@arena.str1(node_id).to_s)
+          dest = escape_html(@arena.str1(node_id).to_s)
           @out << %(<a href="#{dest}")
           append_title_attribute(node_id)
           @out << ">"
@@ -97,8 +108,8 @@ module Mdarena
           @out << "</a>"
         when NodeType::IMAGE
           alt = collect_plain_text(node_id)
-          dest = CGI.escapeHTML(@arena.str1(node_id).to_s)
-          @out << %(<img src="#{dest}" alt="#{CGI.escapeHTML(alt)}")
+          dest = escape_html(@arena.str1(node_id).to_s)
+          @out << %(<img src="#{dest}" alt="#{escape_html(alt)}")
           append_title_attribute(node_id)
           @out << " />"
         when NodeType::HTML_INLINE
@@ -155,7 +166,7 @@ module Mdarena
           @out << text
           @out << "\n" if block
         else
-          escaped = CGI.escapeHTML(text)
+          escaped = escape_html(text)
           if block
             @out << escaped << "\n"
           else
@@ -183,7 +194,7 @@ module Mdarena
         title = @arena.str2(node_id).to_s
         return if title.empty?
 
-        @out << %( title="#{CGI.escapeHTML(title)}")
+        @out << %( title="#{escape_html(title)}")
       end
     end
   end

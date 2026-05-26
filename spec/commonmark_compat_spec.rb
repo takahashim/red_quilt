@@ -757,6 +757,11 @@ RSpec.describe "CommonMark compatibility" do
     { number: 238, section: "Block quotes", markdown: "> foo\n    - bar\n", html: "<blockquote>\n<p>foo\n- bar</p>\n</blockquote>\n" },
     { number: 636, section: "Hard line breaks", markdown: "foo  \n     bar\n", html: "<p>foo<br />\nbar</p>\n" },
     { number: 637, section: "Hard line breaks", markdown: "foo\\\n     bar\n", html: "<p>foo<br />\nbar</p>\n" },
+    { number: 12, section: "Backslash escapes", markdown: "\\!\\\"\\#\\$\\%\\&\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~\n", html: "<p>!&quot;\#$%&amp;'()*+,-./:;&lt;=&gt;?@[\\]^_`{|}~</p>\n" },
+    { number: 620, section: "Raw HTML", markdown: "<a href=\"hi'> <a href=hi'>\n", html: "<p>&lt;a href=&quot;hi'&gt; &lt;a href=hi'&gt;</p>\n" },
+    { number: 622, section: "Raw HTML", markdown: "<a href='bar'title=title>\n", html: "<p>&lt;a href='bar'title=title&gt;</p>\n" },
+    { number: 645, section: "Hard line breaks", markdown: "foo  \n", html: "<p>foo</p>\n" },
+    { number: 650, section: "Textual content", markdown: "hello $.;'there\n", html: "<p>hello $.;'there</p>\n" },
   ].freeze
 
   KNOWN_GAPS = [
