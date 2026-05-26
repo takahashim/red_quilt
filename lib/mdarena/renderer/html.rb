@@ -44,8 +44,10 @@ module Mdarena
           render_children(node_id)
           @out << "</blockquote>\n"
         when NodeType::LIST
-          tag = @arena.int1(node_id) == 1 ? "ol" : "ul"
-          attrs = @arena.int1(node_id) == 1 && @arena.int2(node_id) > 1 ? %( start="#{@arena.int2(node_id)}") : ""
+          ordered = @arena.int1(node_id) == 1
+          tag = ordered ? "ol" : "ul"
+          start_number = @arena.int2(node_id)
+          attrs = ordered && start_number != 1 ? %( start="#{start_number}") : ""
           @out << "<#{tag}#{attrs}>\n"
           render_children(node_id)
           @out << "</#{tag}>\n"

@@ -145,17 +145,13 @@ module Mdarena
         return [item_lines, index]
       end
 
-      pending_blank = nil
+      pending_blanks = []
 
       while index < lines.length
         current = lines[index]
 
         if current.blank
-          if pending_blank
-            # Two consecutive blanks end the item.
-            break
-          end
-          pending_blank = ItemLine.new(
+          pending_blanks << ItemLine.new(
             content: "",
             start_byte: current.start_byte,
             end_byte: current.end_byte,
@@ -168,9 +164,9 @@ module Mdarena
 
         leading_spaces = current.content[/\A */].length
         if leading_spaces >= n
-          # Indented continuation: strip exactly N spaces.
-          item_lines << pending_blank if pending_blank
-          pending_blank = nil
+          # Indented continuation: flush any held blanks and add the line.
+          item_lines.concat(pending_blanks)
+          pending_blanks = []
           item_lines << ItemLine.new(
             content: current.content[n..],
             start_byte: current.start_byte + n,
@@ -187,11 +183,11 @@ module Mdarena
         break if list_item_start(current.content)
 
         # Otherwise it may be lazy paragraph continuation. Requires:
-        #   - we haven't just seen a blank line (blanks always end the
-        #     paragraph that could've been continued)
+        #   - no pending blanks (blanks always end the paragraph that
+        #     could've been continued)
         #   - the previous in-item line is non-blank paragraph content
         #   - the new line is not itself a block-level interrupter
-        if pending_blank.nil? &&
+        if pending_blanks.empty? &&
            item_lines.last && !item_lines.last.blank &&
            !lazy_break?(lines, index)
           # Lazy continuation lines are joined into the open paragraph;
@@ -212,9 +208,10 @@ module Mdarena
         break
       end
 
-      # If we stopped because of a pending blank line, rewind so parse_list
-      # can see the blank and decide loose vs tight.
-      index -= 1 if pending_blank
+      # If we stopped with held blanks (item ended at a less-indented
+      # line), rewind so parse_list can see the blanks and decide
+      # loose vs tight.
+      index -= pending_blanks.length unless pending_blanks.empty?
 
       [item_lines, index]
     end
@@ -430,13 +427,15 @@ module Mdarena
         index += 1
       end
 
-      text = paragraph_lines.map(&:content).join("\n")
+      # Paragraph lines: drop the optional 0-3 spaces of leading indent
+      # that CommonMark allows on each paragraph line.
+      stripped = paragraph_lines.map { |l| l.content.sub(/\A {0,3}/, "") }
+      indent_was_stripped = stripped.zip(paragraph_lines).any? { |s, l| s.length != l.content.length }
+      text = stripped.join("\n")
       start_byte = paragraph_lines.first.start_byte
       end_byte = paragraph_lines.last.end_byte
 
       if setext_level
-        # Setext heading: leading/trailing whitespace on the content
-        # lines is not significant.
         heading_id = @arena.add_node(NodeType::HEADING,
                                      source_start: start_byte,
                                      source_len: end_byte - start_byte,
@@ -446,10 +445,18 @@ module Mdarena
         return index
       end
 
+      # Paragraphs carry a literal when the inline content cannot be
+      # recovered from a contiguous source slice — that is, when block
+      # transformation has already happened (blockquote / list item
+      # interior, `transformed: true`) or when we stripped leading
+      # paragraph indent above. Otherwise leave str1 nil so the inline
+      # pass and NodeRef#source_span / source_location use the real
+      # source bytes.
+      needs_literal = transformed || indent_was_stripped
       paragraph_id = @arena.add_node(NodeType::PARAGRAPH,
                                      source_start: start_byte,
                                      source_len: end_byte - start_byte,
-                                     str1: transformed ? text : nil)
+                                     str1: needs_literal ? text : nil)
       @arena.append_child(parent_id, paragraph_id)
       index
     end

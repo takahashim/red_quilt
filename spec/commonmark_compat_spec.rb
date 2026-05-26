@@ -724,6 +724,16 @@ RSpec.describe "CommonMark compatibility" do
     { number: 309, section: "Lists", markdown: "-   foo\n\n    notcode\n\n-   foo\n\n<!-- -->\n\n    code\n", html: "<ul>\n<li>\n<p>foo</p>\n<p>notcode</p>\n</li>\n<li>\n<p>foo</p>\n</li>\n</ul>\n<!-- -->\n<pre><code>code\n</code></pre>\n" },
     { number: 325, section: "Lists", markdown: "* foo\n  * bar\n\n  baz\n", html: "<ul>\n<li>\n<p>foo</p>\n<ul>\n<li>bar</li>\n</ul>\n<p>baz</p>\n</li>\n</ul>\n" },
     { number: 326, section: "Lists", markdown: "- a\n  - b\n  - c\n\n- d\n  - e\n  - f\n", html: "<ul>\n<li>\n<p>a</p>\n<ul>\n<li>b</li>\n<li>c</li>\n</ul>\n</li>\n<li>\n<p>d</p>\n<ul>\n<li>e</li>\n<li>f</li>\n</ul>\n</li>\n</ul>\n" },
+    { number: 56, section: "Thematic breaks", markdown: " *-*\n", html: "<p><em>-</em></p>\n" },
+    { number: 222, section: "Paragraphs", markdown: "  aaa\n bbb\n", html: "<p>aaa\nbbb</p>\n" },
+    { number: 224, section: "Paragraphs", markdown: "   aaa\nbbb\n", html: "<p>aaa\nbbb</p>\n" },
+    { number: 255, section: "List items", markdown: "- one\n\n two\n", html: "<ul>\n<li>one</li>\n</ul>\n<p>two</p>\n" },
+    { number: 262, section: "List items", markdown: "- foo\n\n\n  bar\n", html: "<ul>\n<li>\n<p>foo</p>\n<p>bar</p>\n</li>\n</ul>\n" },
+    { number: 264, section: "List items", markdown: "- Foo\n\n      bar\n\n\n      baz\n", html: "<ul>\n<li>\n<p>Foo</p>\n<pre><code>bar\n\n\nbaz\n</code></pre>\n</li>\n</ul>\n" },
+    { number: 267, section: "List items", markdown: "0. ok\n", html: "<ol start=\"0\">\n<li>ok</li>\n</ol>\n" },
+    { number: 275, section: "List items", markdown: "   foo\n\nbar\n", html: "<p>foo</p>\n<p>bar</p>\n" },
+    { number: 276, section: "List items", markdown: "-    foo\n\n  bar\n", html: "<ul>\n<li>foo</li>\n</ul>\n<p>bar</p>\n" },
+    { number: 552, section: "Links", markdown: "[\n ]\n\n[\n ]: /uri\n", html: "<p>[\n]</p>\n<p>[\n]: /uri</p>\n" },
   ].freeze
 
   KNOWN_GAPS = [
