@@ -126,23 +126,36 @@ module Mdarena
 
     def collect_list_item(lines, index, match)
       item_lines = []
-      line = lines[index]
+      n = match[:content_indent]
+      first_line = lines[index]
       item_lines << ItemLine.new(
         content: match[:content],
-        start_byte: line.start_byte + match[:content_start],
-        end_byte: line.end_byte,
+        start_byte: first_line.start_byte + match[:content_start],
+        end_byte: first_line.end_byte,
         blank: match[:content].strip.empty?,
         continuation: false
       )
       index += 1
 
+      # If the marker line itself was empty (`-` followed by EOL) and the
+      # very next line is also blank, the item is empty and ends now. This
+      # matches CommonMark spec 5.2: an empty list item cannot grow by
+      # absorbing arbitrary blank lines.
+      if match[:content].strip.empty? && index < lines.length && lines[index].blank
+        return [item_lines, index]
+      end
+
+      pending_blank = nil
+
       while index < lines.length
         current = lines[index]
-        if current.blank
-          next_line = lines[index + 1]
-          break unless next_line && blank_line_continues_item?(next_line.content)
 
-          item_lines << ItemLine.new(
+        if current.blank
+          if pending_blank
+            # Two consecutive blanks end the item.
+            break
+          end
+          pending_blank = ItemLine.new(
             content: "",
             start_byte: current.start_byte,
             end_byte: current.end_byte,
@@ -152,31 +165,76 @@ module Mdarena
           index += 1
           next
         end
-        break if list_item_start(current.content)
-        break unless continuation_line?(current.content, match[:content_indent])
 
-        continuation = current.content.sub(/\A {0,#{match[:content_indent]}}\s?/, "")
-        current_start = current.start_byte + [current.content.index(continuation) || 0, current.content.length].min
-        item_lines << ItemLine.new(
-          content: continuation,
-          start_byte: current_start,
-          end_byte: current.end_byte,
-          blank: continuation.strip.empty?,
-          continuation: true
-        )
-        index += 1
+        leading_spaces = current.content[/\A */].length
+        if leading_spaces >= n
+          # Indented continuation: strip exactly N spaces.
+          item_lines << pending_blank if pending_blank
+          pending_blank = nil
+          item_lines << ItemLine.new(
+            content: current.content[n..],
+            start_byte: current.start_byte + n,
+            end_byte: current.end_byte,
+            blank: false,
+            continuation: true
+          )
+          index += 1
+          next
+        end
+
+        # Less-indented non-blank line: a new list item (any group) ends
+        # this item regardless of paragraph state.
+        break if list_item_start(current.content)
+
+        # Otherwise it may be lazy paragraph continuation. Requires:
+        #   - we haven't just seen a blank line (blanks always end the
+        #     paragraph that could've been continued)
+        #   - the previous in-item line is non-blank paragraph content
+        #   - the new line is not itself a block-level interrupter
+        if pending_blank.nil? &&
+           item_lines.last && !item_lines.last.blank &&
+           !lazy_break?(lines, index)
+          # Lazy continuation lines are joined into the open paragraph;
+          # their leading indentation is dropped (CommonMark spec).
+          stripped = current.content.sub(/\A[ \t]+/, "")
+          strip_len = current.content.length - stripped.length
+          item_lines << ItemLine.new(
+            content: stripped,
+            start_byte: current.start_byte + strip_len,
+            end_byte: current.end_byte,
+            blank: false,
+            continuation: true
+          )
+          index += 1
+          next
+        end
+
+        break
       end
+
+      # If we stopped because of a pending blank line, rewind so parse_list
+      # can see the blank and decide loose vs tight.
+      index -= 1 if pending_blank
 
       [item_lines, index]
     end
 
-    def continuation_line?(text, padding)
-      text.match?(/\A {1,#{[padding, 4].max}}/)
-    end
-
-    def blank_line_continues_item?(text)
-      spaces = text[/\A */].length
-      spaces.positive? && spaces < 4
+    # A line at less-than-N indent breaks lazy continuation when it would
+    # itself start a new block (heading, thematic break, fenced/indented
+    # code, html block, blockquote, list item, table). Same predicate as
+    # paragraph_interrupt? minus the "index > 0" guard.
+    def lazy_break?(lines, index)
+      line = lines[index]
+      return true if atx_heading(line.content)
+      return true if thematic_break?(line.content)
+      return true if fenced_code_start(line.content)
+      return true if html_block_start?(line.content)
+      return true if blockquote_line?(line.content)
+      if (li = list_item_start(line.content)) && list_item_interrupts_paragraph?(li)
+        return true
+      end
+      return true if table_start?(lines, index)
+      false
     end
 
     def same_list_group?(expected, actual)

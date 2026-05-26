@@ -11,17 +11,20 @@ RSpec.describe Mdarena do
     end
 
     it "builds block AST nodes for major block constructs" do
+      # NB: indented blocks live inside the preceding list per CommonMark
+      # spec 5.2; we put the standalone code block before the list so all
+      # major block kinds appear at the top level.
       source = <<~MD
         # Heading
 
         ---
 
+            puts "hi"
+
         > quote
 
         - first
         - second
-
-            puts "hi"
 
         | A | B |
         | - | - |
@@ -35,9 +38,9 @@ RSpec.describe Mdarena do
       expect(doc.root.children.map(&:type)).to eq([
         :heading,
         :thematic_break,
+        :code_block,
         :blockquote,
         :list,
-        :code_block,
         :table,
         :html_block
       ])
