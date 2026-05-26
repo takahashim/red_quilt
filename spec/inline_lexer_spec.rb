@@ -96,4 +96,65 @@ RSpec.describe Markdast::Inline::Lexer do
       expect(result.int2(le_id)).to eq(1)
     end
   end
+
+  describe "CODE_DELIMITER" do
+    it "emits CODE_DELIMITER with run length for a single backtick" do
+      result = lex("a`b")
+      cd = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::CODE_DELIMITER }
+      expect(result.int1(cd)).to eq(1)
+      expect([result.start_byte(cd), result.end_byte(cd)]).to eq([1, 2])
+    end
+
+    it "groups consecutive backticks into a single token" do
+      result = lex("a```b")
+      cd = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::CODE_DELIMITER }
+      expect(result.int1(cd)).to eq(3)
+      expect([result.start_byte(cd), result.end_byte(cd)]).to eq([1, 4])
+    end
+  end
+
+  describe "DELIM_RUN for *" do
+    it "emits with can_open and can_close inside a word (foo*bar)" do
+      result = lex("foo*bar")
+      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      expect(result.int1(dr)).to eq("*".ord)
+      expect(result.int2(dr)).to eq(1)
+      expect(result.int3(dr)).to eq(0b11)
+    end
+
+    it "is only can_open when preceded by whitespace" do
+      result = lex("a *b")
+      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      expect(result.int3(dr) & 0b10).to eq(0b10)
+      expect(result.int3(dr) & 0b01).to eq(0)
+    end
+
+    it "is only can_close when followed by whitespace" do
+      result = lex("a* b")
+      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      expect(result.int3(dr) & 0b10).to eq(0)
+      expect(result.int3(dr) & 0b01).to eq(0b01)
+    end
+
+    it "counts a multi-character run" do
+      result = lex("***foo")
+      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      expect(result.int2(dr)).to eq(3)
+      expect([result.start_byte(dr), result.end_byte(dr)]).to eq([0, 3])
+    end
+  end
+
+  describe "DELIM_RUN for _" do
+    it "is neither can_open nor can_close inside a word (foo_bar)" do
+      result = lex("foo_bar")
+      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      expect(result.int3(dr)).to eq(0)
+    end
+
+    it "opens at the start of a word" do
+      result = lex("a _b")
+      dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
+      expect(result.int3(dr) & 0b10).to eq(0b10)
+    end
+  end
 end

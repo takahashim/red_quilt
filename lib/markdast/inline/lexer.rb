@@ -26,6 +26,7 @@ module Markdast
       # Returns the tokens object that was passed in.
       def lex_into(tokens, start_byte, end_byte)
         @pos = start_byte
+        @start = start_byte
         @end = end_byte
         scan(tokens)
         tokens
@@ -41,9 +42,15 @@ module Markdast
             scan_line_ending(tokens)
           when 0x5C # \\ (backslash)
             scan_backslash(tokens)
+          when 0x60 # `
+            scan_code_delimiter(tokens)
+          when 0x2A # *
+            scan_delim_run(tokens, "*", 0x2A)
+          when 0x5F # _
+            scan_delim_run(tokens, "_", 0x5F)
           else
-            # TODO(commit 3..4): handle other special bytes here.
-            # For now, treat any non-newline / non-backslash byte as text.
+            # TODO(commit 4): handle remaining special bytes ([, ], !, <, &).
+            # For now, treat any non-handled byte as text.
             scan_text(tokens)
           end
         end
@@ -108,6 +115,27 @@ module Markdast
           tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: nxt_pos)
           @pos = nxt_pos
         end
+      end
+
+      def scan_code_delimiter(tokens)
+        start = @pos
+        @pos += 1 while @pos < @end && @source.getbyte(@pos) == 0x60
+        tokens.emit(TokenKind::CODE_DELIMITER,
+                    start_byte: start, end_byte: @pos,
+                    int1: @pos - start)
+      end
+
+      def scan_delim_run(tokens, char, byte)
+        start = @pos
+        @pos += 1 while @pos < @end && @source.getbyte(@pos) == byte
+        count = @pos - start
+        prev_char = Flanking.char_before(@source, start, @start)
+        next_char = Flanking.char_at(@source, @pos, @end)
+        can_open, can_close = Flanking.can_open_close(char, prev_char, next_char)
+        flags = (can_open ? 0b10 : 0) | (can_close ? 0b01 : 0)
+        tokens.emit(TokenKind::DELIM_RUN,
+                    start_byte: start, end_byte: @pos,
+                    int1: byte, int2: count, int3: flags)
       end
 
       def ascii_punct?(byte)
