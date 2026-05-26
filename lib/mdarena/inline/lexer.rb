@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "cgi"
+require "strscan"
 
 require_relative "html_entities"
 
@@ -22,41 +23,47 @@ module Mdarena
         [0x2A, 0x5F, 0x60, 0x5B, 0x5D, 0x21, 0x3C, 0x26, 0x5C, 0x0A, 0x7E].each { |b| a[b] = true }
         a.freeze
       end
-      # Same set as SPECIAL_BYTES, for String#byteindex to jump over long
-      # plain-text runs at C speed instead of a Ruby byte-by-byte loop.
+      # Same set as SPECIAL_BYTES, for String#byteindex / StringScanner to
+      # jump over long plain-text runs at C speed.
       SPECIAL_BYTE_RE = /[*_`\[\]!<&\\\n~]/.freeze
 
-      # \G-anchored regexes reused from the legacy InlineParser. Each is
-      # invoked with String#match(re, @pos), so the match must begin at
-      # @pos and not extend past @end.
-      URI_AUTOLINK_RE = /\G<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
-      EMAIL_AUTOLINK_RE = /\G<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
+      # Anchored regexes for StringScanner#scan. StringScanner already
+      # anchors at the current pos, so no `\G` is needed.
+      URI_AUTOLINK_RE = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
+      EMAIL_AUTOLINK_RE = /<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
       # CommonMark spec 6.6 "Raw HTML": six forms — open tag, closing tag,
       # HTML comment, processing instruction, declaration, CDATA section.
       # Attribute values are allowed to span lines.
-      HTML_OPEN_TAG_RE = %r{\G<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
-      HTML_CLOSING_TAG_RE = %r{\G</[A-Za-z][A-Za-z0-9-]*\s*>}.freeze
+      HTML_OPEN_TAG_RE = %r{<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
+      HTML_CLOSING_TAG_RE = %r{</[A-Za-z][A-Za-z0-9-]*\s*>}.freeze
       # Comment: `<!-->`, `<!--->`, or `<!-- text -->` where text doesn't
       # start with `>` or `->`, end with `-`, or contain `--`.
-      HTML_COMMENT_RE = %r{\G<!-->|\G<!--->|\G<!--(?![>])(?!->)[\s\S]*?(?<!-)-->}.freeze
-      HTML_PROC_INST_RE = %r{\G<\?[\s\S]*?\?>}.freeze
-      HTML_DECLARATION_RE = %r{\G<![A-Za-z][^>]*>}.freeze
-      HTML_CDATA_RE = %r{\G<!\[CDATA\[[\s\S]*?\]\]>}.freeze
-      ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/.freeze
+      HTML_COMMENT_RE = %r{<!-->|<!--->|<!--(?![>])(?!->)[\s\S]*?(?<!-)-->}.freeze
+      HTML_PROC_INST_RE = %r{<\?[\s\S]*?\?>}.freeze
+      HTML_DECLARATION_RE = %r{<![A-Za-z][^>]*>}.freeze
+      HTML_CDATA_RE = %r{<!\[CDATA\[[\s\S]*?\]\]>}.freeze
+      ENTITY_RE = /&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/.freeze
+
+      # Per-character delim-run skip regexes (one per recognised delimiter
+      # character, frozen at load time).
+      ASTERISK_RUN_RE = /\*+/.freeze
+      UNDERSCORE_RUN_RE = /_+/.freeze
+      TILDE_RUN_RE = /~+/.freeze
+      BACKTICK_RUN_RE = /`+/.freeze
 
       def initialize(source)
         @source = source
-        # A binary-encoded view of the source for String#byteindex hot
-        # paths: byteindex on a UTF-8 string raises when the byte offset
-        # falls inside a multibyte sequence; the binary view treats
-        # every byte as its own character.
+        # A binary-encoded view for String#byteindex hot paths (byteindex
+        # on a UTF-8 string raises when the offset falls inside a
+        # multibyte sequence; binary treats every byte as its own char).
         @source_b = source.b
+        @ss = StringScanner.new(source)
       end
 
       # Scans @source[start_byte...end_byte] and emits tokens.
       # Returns the tokens object that was passed in.
       def lex_into(tokens, start_byte, end_byte)
-        @pos = start_byte
+        @ss.pos = start_byte
         @start = start_byte
         @end = end_byte
         scan(tokens)
@@ -66,8 +73,8 @@ module Mdarena
       private
 
       def scan(tokens)
-        until @pos >= @end
-          byte = @source.getbyte(@pos)
+        while @ss.pos < @end
+          byte = @source.getbyte(@ss.pos)
           case byte
           when 0x0A # \n
             scan_line_ending(tokens)
@@ -76,11 +83,11 @@ module Mdarena
           when 0x60 # `
             scan_code_delimiter(tokens)
           when 0x2A # *
-            scan_delim_run(tokens, "*", 0x2A)
+            scan_delim_run(tokens, ASTERISK_RUN_RE, "*", 0x2A)
           when 0x5F # _
-            scan_delim_run(tokens, "_", 0x5F)
+            scan_delim_run(tokens, UNDERSCORE_RUN_RE, "_", 0x5F)
           when 0x7E # ~ (GFM strikethrough)
-            scan_delim_run(tokens, "~", 0x7E)
+            scan_delim_run(tokens, TILDE_RUN_RE, "~", 0x7E)
           when 0x5B # [
             scan_one_byte_token(tokens, TokenKind::LBRACKET)
           when 0x5D # ]
@@ -98,24 +105,22 @@ module Mdarena
       end
 
       def scan_text(tokens)
-        start = @pos
+        start = @ss.pos
         # Always make progress: consume the current byte even if it's a
         # "special" byte that fell through to scan_text (e.g. a `&` that
-        # didn't match ENTITY_RE). Then use String#byteindex to leap to
-        # the next special byte at C speed — much faster than a Ruby
-        # getbyte loop, and byteindex is byte-offset based so we don't
-        # hit the char-vs-byte pitfall on multibyte input.
-        @pos += 1 if @pos < @end
-        if @pos < @end
-          next_special = @source_b.byteindex(SPECIAL_BYTE_RE, @pos)
-          @pos = (next_special.nil? || next_special >= @end) ? @end : next_special
+        # didn't match ENTITY_RE). Then use byteindex against the binary
+        # view to leap to the next special byte at C speed.
+        @ss.pos += 1 if @ss.pos < @end
+        if @ss.pos < @end
+          next_special = @source_b.byteindex(SPECIAL_BYTE_RE, @ss.pos)
+          @ss.pos = (next_special.nil? || next_special >= @end) ? @end : next_special
         end
-        tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos) if @pos > start
+        tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos) if @ss.pos > start
       end
 
       def scan_line_ending(tokens)
-        start = @pos
-        @pos += 1
+        start = @ss.pos
+        @ss.pos += 1
         # Count trailing ASCII spaces immediately before the newline; the
         # builder uses this to decide softbreak vs hardbreak (>= 2 spaces).
         trailing_spaces = 0
@@ -125,144 +130,155 @@ module Mdarena
           i -= 1
         end
         tokens.emit(TokenKind::LINE_ENDING,
-                    start_byte: start, end_byte: @pos,
+                    start_byte: start, end_byte: @ss.pos,
                     int1: trailing_spaces)
       end
 
       def scan_backslash(tokens)
-        start = @pos
+        start = @ss.pos
         nxt_pos = start + 1
         if nxt_pos >= @end
           tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: nxt_pos)
-          @pos = nxt_pos
+          @ss.pos = nxt_pos
           return
         end
 
         nxt = @source.getbyte(nxt_pos)
         if nxt == 0x0A
           # "\\\n" → hardbreak (backslash form). int2 = 1 signals the form.
-          @pos = nxt_pos + 1
+          @ss.pos = nxt_pos + 1
           tokens.emit(TokenKind::LINE_ENDING,
-                      start_byte: start, end_byte: @pos,
+                      start_byte: start, end_byte: @ss.pos,
                       int1: 0, int2: 1)
         elsif ascii_punct?(nxt)
-          @pos = nxt_pos + 1
+          @ss.pos = nxt_pos + 1
           tokens.emit(TokenKind::ESCAPED_CHAR,
-                      start_byte: start, end_byte: @pos,
+                      start_byte: start, end_byte: @ss.pos,
                       str1: nxt.chr)
         else
           tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: nxt_pos)
-          @pos = nxt_pos
+          @ss.pos = nxt_pos
         end
       end
 
       def scan_code_delimiter(tokens)
-        start = @pos
-        @pos += 1 while @pos < @end && @source.getbyte(@pos) == 0x60
+        start = @ss.pos
+        # C-level character-class skip beats a Ruby `while ... getbyte`
+        # loop for long backtick runs.
+        count = @ss.skip(BACKTICK_RUN_RE)
+        finish = @ss.pos
+        if finish > @end
+          # Skip overshot the lexer's logical end; clamp back.
+          count -= finish - @end
+          @ss.pos = @end
+        end
         tokens.emit(TokenKind::CODE_DELIMITER,
-                    start_byte: start, end_byte: @pos,
-                    int1: @pos - start)
+                    start_byte: start, end_byte: @ss.pos,
+                    int1: count)
       end
 
-      def scan_delim_run(tokens, char, byte)
-        start = @pos
-        @pos += 1 while @pos < @end && @source.getbyte(@pos) == byte
-        count = @pos - start
+      def scan_delim_run(tokens, run_re, char, byte)
+        start = @ss.pos
+        @ss.skip(run_re)
+        if @ss.pos > @end
+          @ss.pos = @end
+        end
+        count = @ss.pos - start
         prev_char = Flanking.char_before(@source, start, @start)
-        next_char = Flanking.char_at(@source, @pos, @end)
+        next_char = Flanking.char_at(@source, @ss.pos, @end)
         can_open, can_close = Flanking.can_open_close(char, prev_char, next_char)
         # A run that can neither open nor close (e.g. underscores inside a
         # word) can never participate in emphasis, so emit it as plain TEXT
         # to allow text coalescing with neighbours.
         if !can_open && !can_close
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos)
           return
         end
         flags = (can_open ? 0b10 : 0) | (can_close ? 0b01 : 0)
         tokens.emit(TokenKind::DELIM_RUN,
-                    start_byte: start, end_byte: @pos,
+                    start_byte: start, end_byte: @ss.pos,
                     int1: byte, int2: count, int3: flags)
       end
 
       def scan_one_byte_token(tokens, kind)
-        start = @pos
-        @pos += 1
-        tokens.emit(kind, start_byte: start, end_byte: @pos)
+        start = @ss.pos
+        @ss.pos += 1
+        tokens.emit(kind, start_byte: start, end_byte: @ss.pos)
       end
 
       def scan_bang(tokens)
-        start = @pos
-        if @pos + 1 < @end && @source.getbyte(@pos + 1) == 0x5B # [
-          @pos += 2
-          tokens.emit(TokenKind::BANG_LBRACKET, start_byte: start, end_byte: @pos)
+        start = @ss.pos
+        if @ss.pos + 1 < @end && @source.getbyte(@ss.pos + 1) == 0x5B # [
+          @ss.pos += 2
+          tokens.emit(TokenKind::BANG_LBRACKET, start_byte: start, end_byte: @ss.pos)
         else
-          @pos += 1
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+          @ss.pos += 1
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos)
         end
       end
 
       def scan_angle(tokens)
-        start = @pos
-        if (m = match_at(URI_AUTOLINK_RE))
-          @pos = m.end(0)
+        start = @ss.pos
+        if scan_within_end(URI_AUTOLINK_RE)
           tokens.emit(TokenKind::AUTOLINK_URI,
-                      start_byte: start, end_byte: @pos,
-                      str1: m[1])
-        elsif (m = match_at(EMAIL_AUTOLINK_RE))
-          @pos = m.end(0)
+                      start_byte: start, end_byte: @ss.pos,
+                      str1: @ss[1])
+        elsif scan_within_end(EMAIL_AUTOLINK_RE)
           tokens.emit(TokenKind::AUTOLINK_EMAIL,
-                      start_byte: start, end_byte: @pos,
-                      str1: m[1])
-        elsif (m = match_at(HTML_OPEN_TAG_RE)) ||
-              (m = match_at(HTML_CLOSING_TAG_RE)) ||
-              (m = match_at(HTML_COMMENT_RE)) ||
-              (m = match_at(HTML_PROC_INST_RE)) ||
-              (m = match_at(HTML_DECLARATION_RE)) ||
-              (m = match_at(HTML_CDATA_RE))
-          @pos = m.end(0)
+                      start_byte: start, end_byte: @ss.pos,
+                      str1: @ss[1])
+        elsif (matched = scan_within_end(HTML_OPEN_TAG_RE)) ||
+              (matched = scan_within_end(HTML_CLOSING_TAG_RE)) ||
+              (matched = scan_within_end(HTML_COMMENT_RE)) ||
+              (matched = scan_within_end(HTML_PROC_INST_RE)) ||
+              (matched = scan_within_end(HTML_DECLARATION_RE)) ||
+              (matched = scan_within_end(HTML_CDATA_RE))
           tokens.emit(TokenKind::HTML_INLINE,
-                      start_byte: start, end_byte: @pos,
-                      str1: m[0])
+                      start_byte: start, end_byte: @ss.pos,
+                      str1: matched)
         else
-          @pos += 1
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+          @ss.pos += 1
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos)
         end
       end
 
       def scan_amp(tokens)
-        start = @pos
-        if (m = match_at(ENTITY_RE))
-          @pos = m.end(0)
+        start = @ss.pos
+        if (matched = scan_within_end(ENTITY_RE))
           tokens.emit(TokenKind::ENTITY,
-                      start_byte: start, end_byte: @pos,
-                      str1: decode_entity(m[0]))
+                      start_byte: start, end_byte: @ss.pos,
+                      str1: decode_entity(matched))
         else
-          @pos += 1
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+          @ss.pos += 1
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos)
         end
       end
 
-      # Decodes a single entity reference. Beyond CGI.unescapeHTML's
-      # XML-5 set, this layer handles:
-      # - U+0000: replaced with U+FFFD per CommonMark spec
-      # - leaves unknown named entities as the raw `&name;` text
-def decode_entity(raw)
-  if raw.start_with?("&#")
-    decoded = CGI.unescapeHTML(raw)
-    return decoded.tr("\u0000", "\uFFFD")
-  end
-  encoded = HTML_ENTITIES[raw[1..-2]]
-  return raw unless encoded
-  encoded.dup.force_encoding(Encoding::UTF_8)
-end
+      # StringScanner#scan but constrained to @end. Returns the matched
+      # string on success (rewinding when the match extends past @end),
+      # nil otherwise.
+      def scan_within_end(regex)
+        before = @ss.pos
+        matched = @ss.scan(regex)
+        return nil unless matched
+        if @ss.pos > @end
+          @ss.pos = before
+          return nil
+        end
+        matched
+      end
 
-      # Returns a MatchData for a \G-anchored regex applied at @pos, or nil
-      # if no match or if the match would extend past @end.
-      def match_at(regex)
-        m = regex.match(@source, @pos)
-        return nil unless m
-        return nil if m.end(0) > @end
-        m
+      # Decodes a single entity reference. CommonMark requires the full
+      # HTML5 named-entity set, plus the numeric forms. U+0000 is
+      # replaced with U+FFFD; unknown names fall through unchanged.
+      def decode_entity(raw)
+        if raw.start_with?("&#")
+          decoded = CGI.unescapeHTML(raw)
+          return decoded.tr("\u0000", "\uFFFD")
+        end
+        encoded = HTML_ENTITIES[raw[1..-2]]
+        return raw unless encoded
+        encoded.dup.force_encoding(Encoding::UTF_8)
       end
 
       def ascii_punct?(byte)
