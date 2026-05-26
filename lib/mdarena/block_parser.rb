@@ -462,9 +462,13 @@ module Mdarena
         index += 1
       end
 
-      # Paragraph lines: drop the optional 0-3 spaces of leading indent
-      # that CommonMark allows on each paragraph line.
-      stripped = paragraph_lines.map { |l| l.content.sub(/\A {0,3}/, "") }
+      # CommonMark: the first paragraph line may carry 0-3 spaces of
+      # leading indent (4+ would be an indented code block, so it never
+      # reaches this branch). Continuation lines have no fixed indent
+      # cap — all leading whitespace is stripped before joining.
+      stripped = paragraph_lines.map.with_index do |l, i|
+        i.zero? ? l.content.sub(/\A {0,3}/, "") : l.content.sub(/\A[ \t]*/, "")
+      end
       indent_was_stripped = stripped.zip(paragraph_lines).any? { |s, l| s.length != l.content.length }
       text = stripped.join("\n")
       start_byte = paragraph_lines.first.start_byte
@@ -545,17 +549,31 @@ module Mdarena
       lines
     end
 
+    # ATX headings per CommonMark spec:
+    # - 0-3 spaces of indent, then 1-6 `#`s
+    # - either end-of-line (empty heading) or at least one space/tab
+    #   followed by the content
+    # - optional trailing `#`s are only stripped when separated from the
+    #   content by whitespace (so `# foo#` keeps the `#`)
+    ATX_HEADING_RE = /\A {0,3}(\#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+\#+)?[ \t]*\z/.freeze
+
     def atx_heading(text)
-      match = /\A {0,3}(#{Regexp.escape('#')}{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*\z/.match(text)
+      match = ATX_HEADING_RE.match(text)
       return unless match
 
-      content_index = text.index(match[2]) || text.bytesize
-      { level: match[1].length, content: match[2], content_start: content_index }
+      content = match[2].to_s
+      content_index = content.empty? ? text.length : (text.index(content) || text.bytesize)
+      { level: match[1].length, content: content, content_start: content_index }
     end
 
+    # Thematic break per CommonMark: 0-3 spaces of indent, then 3+ of
+    # the same character (`*`, `-`, or `_`) optionally separated by
+    # whitespace, and nothing else on the line. Lines indented 4+ spaces
+    # are indented code, not thematic breaks.
+    THEMATIC_BREAK_RE = /\A {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})\z/.freeze
+
     def thematic_break?(text)
-      stripped = text.strip
-      stripped.match?(/\A(?:\*\s*){3,}\z|\A(?:-\s*){3,}\z|\A(?:_\s*){3,}\z/)
+      THEMATIC_BREAK_RE.match?(text)
     end
 
     def blockquote_line?(text)

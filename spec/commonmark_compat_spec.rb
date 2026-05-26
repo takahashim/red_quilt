@@ -746,6 +746,17 @@ RSpec.describe "CommonMark compatibility" do
     { number: 567, section: "Links", markdown: "[foo]()\n\n[foo]: /url1\n", html: "<p><a href=\"\">foo</a></p>\n" },
     { number: 579, section: "Images", markdown: "My ![foo bar](/path/to/train.jpg  \"title\"   )\n", html: "<p>My <img src=\"/path/to/train.jpg\" alt=\"foo bar\" title=\"title\" /></p>\n" },
     { number: 580, section: "Images", markdown: "![foo](<url>)\n", html: "<p><img src=\"url\" alt=\"foo\" /></p>\n" },
+    { number: 48, section: "Thematic breaks", markdown: "    ***\n", html: "<pre><code>***\n</code></pre>\n" },
+    { number: 49, section: "Thematic breaks", markdown: "Foo\n    ***\n", html: "<p>Foo\n***</p>\n" },
+    { number: 70, section: "ATX headings", markdown: "foo\n    # bar\n", html: "<p>foo\n# bar</p>\n" },
+    { number: 75, section: "ATX headings", markdown: "# foo#\n", html: "<h1>foo#</h1>\n" },
+    { number: 76, section: "ATX headings", markdown: "### foo \\###\n## foo #\\##\n# foo \\#\n", html: "<h3>foo ###</h3>\n<h2>foo ###</h2>\n<h1>foo #</h1>\n" },
+    { number: 87, section: "Setext headings", markdown: "Foo\n    ---\n", html: "<p>Foo\n---</p>\n" },
+    { number: 113, section: "Indented code blocks", markdown: "Foo\n    bar\n\n", html: "<p>Foo\nbar</p>\n" },
+    { number: 223, section: "Paragraphs", markdown: "aaa\n             bbb\n                                       ccc\n", html: "<p>aaa\nbbb\nccc</p>\n" },
+    { number: 238, section: "Block quotes", markdown: "> foo\n    - bar\n", html: "<blockquote>\n<p>foo\n- bar</p>\n</blockquote>\n" },
+    { number: 636, section: "Hard line breaks", markdown: "foo  \n     bar\n", html: "<p>foo<br />\nbar</p>\n" },
+    { number: 637, section: "Hard line breaks", markdown: "foo\\\n     bar\n", html: "<p>foo<br />\nbar</p>\n" },
   ].freeze
 
   KNOWN_GAPS = [
