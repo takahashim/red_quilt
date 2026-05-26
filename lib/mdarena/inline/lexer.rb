@@ -22,6 +22,9 @@ module Mdarena
         [0x2A, 0x5F, 0x60, 0x5B, 0x5D, 0x21, 0x3C, 0x26, 0x5C, 0x0A, 0x7E].each { |b| a[b] = true }
         a.freeze
       end
+      # Same set as SPECIAL_BYTES, for String#byteindex to jump over long
+      # plain-text runs at C speed instead of a Ruby byte-by-byte loop.
+      SPECIAL_BYTE_RE = /[*_`\[\]!<&\\\n~]/.freeze
 
       # \G-anchored regexes reused from the legacy InlineParser. Each is
       # invoked with String#match(re, @pos), so the match must begin at
@@ -43,6 +46,11 @@ module Mdarena
 
       def initialize(source)
         @source = source
+        # A binary-encoded view of the source for String#byteindex hot
+        # paths: byteindex on a UTF-8 string raises when the byte offset
+        # falls inside a multibyte sequence; the binary view treats
+        # every byte as its own character.
+        @source_b = source.b
       end
 
       # Scans @source[start_byte...end_byte] and emits tokens.
@@ -93,14 +101,14 @@ module Mdarena
         start = @pos
         # Always make progress: consume the current byte even if it's a
         # "special" byte that fell through to scan_text (e.g. a `&` that
-        # didn't match ENTITY_RE). Subsequent bytes are added to the TEXT
-        # run until we hit a special byte. Byte-by-byte walk avoids the
-        # String#index pitfall of char vs byte offsets on multibyte input.
+        # didn't match ENTITY_RE). Then use String#byteindex to leap to
+        # the next special byte at C speed — much faster than a Ruby
+        # getbyte loop, and byteindex is byte-offset based so we don't
+        # hit the char-vs-byte pitfall on multibyte input.
         @pos += 1 if @pos < @end
-        while @pos < @end
-          b = @source.getbyte(@pos)
-          break if SPECIAL_BYTES[b]
-          @pos += 1
+        if @pos < @end
+          next_special = @source_b.byteindex(SPECIAL_BYTE_RE, @pos)
+          @pos = (next_special.nil? || next_special >= @end) ? @end : next_special
         end
         tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos) if @pos > start
       end
