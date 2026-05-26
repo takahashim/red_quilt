@@ -153,9 +153,9 @@ module Mdarena
           next
         end
         break if list_item_start(current.content)
-        break unless continuation_line?(current.content, match[:padding])
+        break unless continuation_line?(current.content, match[:content_indent])
 
-        continuation = current.content.sub(/\A {0,#{match[:padding]}}\s?/, "")
+        continuation = current.content.sub(/\A {0,#{match[:content_indent]}}\s?/, "")
         current_start = current.start_byte + [current.content.index(continuation) || 0, current.content.length].min
         item_lines << ItemLine.new(
           content: continuation,
@@ -407,15 +407,26 @@ module Mdarena
 
     def paragraph_interrupt?(lines, index)
       line = lines[index]
-      index > 0 && (
-        atx_heading(line.content) ||
-        thematic_break?(line.content) ||
-        fenced_code_start(line.content) ||
-        html_block_start?(line.content) ||
-        blockquote_line?(line.content) ||
-        list_item_start(line.content) ||
-        table_start?(lines, index)
-      )
+      return false unless index > 0
+      return true if atx_heading(line.content)
+      return true if thematic_break?(line.content)
+      return true if fenced_code_start(line.content)
+      return true if html_block_start?(line.content)
+      return true if blockquote_line?(line.content)
+      if (li = list_item_start(line.content)) && list_item_interrupts_paragraph?(li)
+        return true
+      end
+      return true if table_start?(lines, index)
+      false
+    end
+
+    # CommonMark spec: a list item can only interrupt an open paragraph if
+    # it has visible content, and (for ordered lists) only if the start
+    # number is 1.
+    def list_item_interrupts_paragraph?(li_match)
+      return false if li_match[:content].empty?
+      return false if li_match[:ordered] && li_match[:start_number] != 1
+      true
     end
 
     def build_lines(source)
@@ -463,29 +474,93 @@ module Mdarena
       )
     end
 
+    # Recognises the start of a list item per CommonMark spec section 5.2.
+    #
+    # Returns nil if `text` is not a list-item start, otherwise a Hash:
+    #
+    #   ordered:        true (1.  / 1)) or false (- / + / *)
+    #   start_number:   Integer (0 for unordered)
+    #   marker:         String, the marker character (".", ")", "-", "+", "*")
+    #   content:        String, the body of the line as it should appear
+    #                   inside the item (may include leading whitespace
+    #                   when the marker was followed by 5+ spaces -- that
+    #                   is the indented-code form).
+    #   content_start:  Integer, byte offset into `text` where `content`
+    #                   begins. Always (leading + marker_width + 1) in
+    #                   absolute terms, regardless of spec form.
+    #   content_indent: Integer, the spec's N -- the indent level all
+    #                   subsequent continuation lines must reach to stay
+    #                   inside this item.
+    #
+    # CommonMark form selection:
+    #   - W spaces after the marker, where 1 <= W <= 4:
+    #       N = leading + marker_width + W
+    #       content is the rest of the line as-is
+    #   - W >= 5 (indented-code form):
+    #       N = leading + marker_width + 1
+    #       content keeps (W - 1) leading spaces so it parses as an
+    #       indented code block inside the item
+    #   - W == 0 (marker followed by EOL or blank content):
+    #       N = leading + marker_width + 1
+    #       content is "" (empty line)
     def list_item_start(text)
-      match = /\A( {0,3})([*+-])\s+(.*)\z/.match(text)
-      if match
-        return {
-          ordered: false,
-          start_number: 0,
-          marker: match[2],
-          content: match[3],
-          content_start: match[1].bytesize + 2,
-          padding: match[1].bytesize + 2
-        }
+      m = /\A( {0,3})/.match(text)
+      leading = m[1].length
+      rest = text[leading..]
+
+      if (bm = /\A([*+\-])(?:([ \t]+)(.*)|([ \t]*)\z)/.match(rest))
+        marker = bm[1]
+        if bm[2]
+          spaces_after = bm[2].length
+          body = bm[3]
+        else
+          spaces_after = 0
+          body = ""
+        end
+        return build_list_match(leading, 1, marker, spaces_after, body,
+                                ordered: false, start_number: 0)
       end
 
-      match = /\A( {0,3})(\d+)([.)])\s+(.*)\z/.match(text)
-      return unless match
+      if (om = /\A(\d{1,9})([.)])(?:([ \t]+)(.*)|([ \t]*)\z)/.match(rest))
+        digits = om[1]
+        marker = om[2]
+        if om[3]
+          spaces_after = om[3].length
+          body = om[4]
+        else
+          spaces_after = 0
+          body = ""
+        end
+        return build_list_match(leading, digits.length + 1, marker, spaces_after, body,
+                                ordered: true, start_number: digits.to_i)
+      end
+
+      nil
+    end
+
+    def build_list_match(leading, marker_width, marker, spaces_after, body, ordered:, start_number:)
+      if body.empty?
+        # Marker followed by EOL: empty item content.
+        content_indent = leading + marker_width + 1
+        content = ""
+      elsif spaces_after >= 5
+        # Indented-code form: keep (spaces_after - 1) of the spaces
+        # in the content so the body of the item is recognised as an
+        # indented code block.
+        content_indent = leading + marker_width + 1
+        content = (" " * (spaces_after - 1)) + body
+      else
+        content_indent = leading + marker_width + spaces_after
+        content = body
+      end
 
       {
-        ordered: true,
-        start_number: match[2].to_i,
-        marker: match[3],
-        content: match[4],
-        content_start: match[1].bytesize + match[2].bytesize + match[3].bytesize + 1,
-        padding: match[1].bytesize + match[2].bytesize + match[3].bytesize + 1
+        ordered: ordered,
+        start_number: start_number,
+        marker: marker,
+        content: content,
+        content_start: leading + marker_width + 1,
+        content_indent: content_indent
       }
     end
 
