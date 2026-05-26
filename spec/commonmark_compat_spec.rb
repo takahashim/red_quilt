@@ -850,18 +850,12 @@ RSpec.describe "CommonMark compatibility" do
     { number: 33, section: "Entity and numeric character references", markdown: "[foo]\n\n[foo]: /f&ouml;&ouml; \"f&ouml;&ouml;\"\n", html: "<p><a href=\"/f%C3%B6%C3%B6\" title=\"föö\">foo</a></p>\n" },
     { number: 195, section: "Link reference definitions", markdown: "[Foo bar]:\n<my url>\n'title'\n\n[Foo bar]\n", html: "<p><a href=\"my%20url\" title=\"title\">Foo bar</a></p>\n" },
     { number: 202, section: "Link reference definitions", markdown: "[foo]: /url\\bar\\*baz \"foo\\\"bar\\baz\"\n\n[foo]\n", html: "<p><a href=\"/url%5Cbar*baz\" title=\"foo&quot;bar\\baz\">foo</a></p>\n" },
+    { number: 182, section: "HTML blocks", markdown: "<![CDATA[\nfunction matchwo(a,b)\n{\n  if (a < b && a < 0) then {\n    return 1;\n\n  } else {\n\n    return 0;\n  }\n}\n]]>\nokay\n", html: "<![CDATA[\nfunction matchwo(a,b)\n{\n  if (a < b && a < 0) then {\n    return 1;\n\n  } else {\n\n    return 0;\n  }\n}\n]]>\n<p>okay</p>\n" },
+    { number: 194, section: "Link reference definitions", markdown: "[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n", html: "<p><a href=\"my_(url)\" title=\"title (with parens)\">Foo*bar]</a></p>\n" },
+    { number: 201, section: "Link reference definitions", markdown: "[foo]: <bar>(baz)\n\n[foo]\n", html: "<p>[foo]: <bar>(baz)</p>\n<p>[foo]</p>\n" },
   ].freeze
 
-  KNOWN_GAPS = [
-    {
-      number: 182,
-      section: "Link reference definitions",
-      markdown: "[foo]: <bar>(baz)\n\n[foo]\n",
-      html: "<p><a href=\"bar(baz)\">foo</a></p>\n",
-      reason: "angle-bracketed destination + trailing chars: cmark strips inner brackets, " \
-              "but we don't yet model that"
-    }
-  ].freeze
+  KNOWN_GAPS = [].freeze
 
   PASSING_EXAMPLES.each do |example|
     it "matches CommonMark 0.31.2 example #{example[:number]} (#{example[:section]})" do

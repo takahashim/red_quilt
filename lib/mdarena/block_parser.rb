@@ -812,7 +812,8 @@ module Mdarena
 
     def link_reference_definition(lines, index)
       text = lines[index].content
-      match = /\A {0,3}\[([^\]]+)\]:(.*)\z/.match(text)
+      # A reference label may contain `\]` (backslash-escaped close bracket).
+      match = /\A {0,3}\[((?:[^\\\]]|\\.)+)\]:(.*)\z/.match(text)
       return unless match
 
       label = normalize_reference_label(match[1])
@@ -884,16 +885,13 @@ module Mdarena
         close = source.index(">")
         if close
           tail = source[(close + 1)..].to_s
-          # CommonMark: when the closing `>` is followed by whitespace or
-          # EOL, this is a clean angle-bracketed destination. Otherwise
-          # (e.g. `<bar>(baz)`) the spec wants the whole token to fall
-          # through to a raw-destination interpretation that also strips
-          # any internal angle brackets — currently unsupported, see
-          # KNOWN_GAPS #182.
           if tail.empty? || tail.match?(/\A[ \t\r\n]/)
             return [source[0..close], tail]
           end
         end
+        # Raw destinations cannot start with `<`, so once the angle
+        # form fails there is no fallback.
+        return [nil, nil]
       end
 
       match = /\A(\S+)(.*)\z/m.match(source)
