@@ -865,6 +865,12 @@ RSpec.describe "CommonMark compatibility" do
     { number: 8, section: "Tabs", markdown: "    foo\n\tbar\n", html: "<pre><code>foo\nbar\n</code></pre>\n" },
     { number: 9, section: "Tabs", markdown: " - foo\n   - bar\n\t - baz\n", html: "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>baz</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n" },
     { number: 540, section: "Links", markdown: "[ẞ]\n\n[SS]: /url\n", html: "<p><a href=\"/url\">ẞ</a></p>\n" },
+    { number: 300, section: "List items", markdown: "- # Foo\n- Bar\n  ---\n  baz\n", html: "<ul>\n<li>\n<h1>Foo</h1>\n</li>\n<li>\n<h2>Bar</h2>\nbaz</li>\n</ul>\n" },
+    { number: 312, section: "Lists", markdown: "- a\n - b\n  - c\n   - d\n    - e\n", html: "<ul>\n<li>a</li>\n<li>b</li>\n<li>c</li>\n<li>d\n- e</li>\n</ul>\n" },
+    { number: 546, section: "Links", markdown: "[foo][ref[]\n\n[ref[]: /uri\n", html: "<p>[foo][ref[]</p>\n<p>[ref[]: /uri</p>\n" },
+    { number: 210, section: "Link reference definitions", markdown: "[foo]: /url\n\"title\" ok\n", html: "<p>&quot;title&quot; ok</p>\n" },
+    { number: 250, section: "Block quotes", markdown: "> > > foo\nbar\n", html: "<blockquote>\n<blockquote>\n<blockquote>\n<p>foo\nbar</p>\n</blockquote>\n</blockquote>\n</blockquote>\n" },
+    { number: 251, section: "Block quotes", markdown: ">>> foo\n> bar\n>>baz\n", html: "<blockquote>\n<blockquote>\n<blockquote>\n<p>foo\nbar\nbaz</p>\n</blockquote>\n</blockquote>\n</blockquote>\n" },
   ].freeze
 
   KNOWN_GAPS = [].freeze

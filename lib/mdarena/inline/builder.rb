@@ -646,6 +646,9 @@ end
           b = @source.getbyte(i)
           if b == 0x5D
             return [@source.byteslice(start_byte + 1, i - start_byte - 1).to_s, i + 1]
+          elsif b == 0x5B
+            # An unescaped `[` inside a reference label voids the form.
+            return [nil, nil]
           elsif b == 0x5C && i + 1 < @source.bytesize
             i += 2
             next

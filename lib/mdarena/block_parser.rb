@@ -3,7 +3,7 @@
 module Mdarena
   class BlockParser
     Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy, keyword_init: true)
-    ItemLine = Struct.new(:content, :start_byte, :end_byte, :blank, :continuation, keyword_init: true)
+    ItemLine = Struct.new(:content, :start_byte, :end_byte, :blank, :continuation, :lazy, keyword_init: true)
 
     def initialize(arena)
       @arena = arena
@@ -73,7 +73,11 @@ module Mdarena
             if stripped.content.strip.empty?
               false # `>` 単独 (or `>` followed by blank) ends any open paragraph
             else
-              paragraph_eligible_line?(stripped.content)
+              # Recurse through any inner blockquote prefixes — an
+              # innermost open paragraph (e.g. `> > > foo` where `foo`
+              # is paragraph-eligible) lets a `>`-less follow-up line
+              # lazily continue it even at the outer level.
+              paragraph_eligible_through_blockquotes?(stripped.content)
             end
           block_lines << stripped
         elsif paragraph_open && !lazy_break?(lines, index)
@@ -105,6 +109,20 @@ module Mdarena
     # Whether this line looks like plain paragraph content (eligible to be
     # extended by a subsequent lazy-continuation line). Anything that
     # would start another block type is rejected.
+    # Like paragraph_eligible_line?, but transparently peels any number
+    # of leading blockquote prefixes first. Used to detect that a `>`-
+    # only chain still has an open paragraph at the deepest level.
+    def paragraph_eligible_through_blockquotes?(content)
+      c = content
+      while blockquote_line?(c)
+        m = /\A {0,3}> ?/.match(c)
+        break unless m
+        c = c[m[0].length..]
+        return false if c.strip.empty?
+      end
+      paragraph_eligible_line?(c)
+    end
+
     def paragraph_eligible_line?(content)
       return false if indented_code_line?(content)
       return false if fenced_code_start(content)
@@ -245,7 +263,10 @@ module Mdarena
            item_lines.last && !item_lines.last.blank &&
            !lazy_break?(lines, index)
           # Lazy continuation lines are joined into the open paragraph;
-          # their leading indentation is dropped (CommonMark spec).
+          # their leading indentation is dropped (CommonMark spec). The
+          # `lazy` flag tells parse_paragraph to absorb the line even
+          # when its stripped form would otherwise look like a fresh
+          # block start (e.g. `    - e` becoming `- e`).
           stripped = current.content.sub(/\A[ \t]+/, "")
           strip_len = current.content.length - stripped.length
           item_lines << ItemLine.new(
@@ -253,7 +274,8 @@ module Mdarena
             start_byte: current.start_byte + strip_len,
             end_byte: current.end_byte,
             blank: false,
-            continuation: true
+            continuation: true,
+            lazy: true
           )
           index += 1
           next
@@ -508,7 +530,14 @@ module Mdarena
           break
         end
 
-        break if index > start_index && paragraph_interrupt?(lines, index)
+        # Lazy continuation lines always extend the open paragraph;
+        # they have already been classified as paragraph content by the
+        # outer collector, so we must not let `paragraph_interrupt?`
+        # split them off into a new block (which would also try to
+        # parse them as e.g. a list item start).
+        unless line.lazy
+          break if index > start_index && paragraph_interrupt?(lines, index)
+        end
         # NOTE: Per CommonMark, a `[label]: ...` line cannot start a
         # link reference definition inside an open paragraph — it's
         # absorbed as paragraph continuation. The dispatch in
@@ -1028,8 +1057,9 @@ module Mdarena
 
     def link_reference_definition(lines, index)
       text = lines[index].content
-      # A reference label may contain `\]` (backslash-escaped close bracket).
-      match = /\A {0,3}\[((?:[^\\\]]|\\.)+)\]:(.*)\z/.match(text)
+      # A reference label may contain `\[` / `\]` (backslash-escaped),
+      # but never an unescaped `[` or `]`.
+      match = /\A {0,3}\[((?:[^\\\[\]]|\\.)+)\]:(.*)\z/.match(text)
       return unless match
 
       label = normalize_reference_label(match[1])
@@ -1056,11 +1086,14 @@ module Mdarena
       end
 
       title_source = rest.to_s
+      consumed_before_title = consumed
+      title_on_separate_line = false
       if title_source.strip.empty? && index + consumed < lines.length
         next_line = lines[index + consumed]
         if next_line && potential_reference_title_start?(next_line.content)
           title_source = next_line.content
           consumed += 1
+          title_on_separate_line = true
         end
       end
 
@@ -1073,7 +1106,20 @@ module Mdarena
       end
 
       title, trailing = parse_reference_title(title_source)
-      return if trailing && trailing.match?(/\S/)
+      if trailing && trailing.match?(/\S/)
+        # Title parse failed with garbage after the closer.
+        if title_on_separate_line
+          # The title was pulled from a follow-up line; back off so
+          # that line is reparsed as ordinary content and the def is
+          # still accepted (sans title).
+          consumed = consumed_before_title
+          title = nil
+        else
+          # Title was on the destination line itself; the whole def
+          # is invalid.
+          return
+        end
+      end
 
       {
         reference: {

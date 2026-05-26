@@ -153,9 +153,11 @@ module Mdarena
         until child_id == -1
           type = @arena.type(child_id)
           if tight && type == NodeType::PARAGRAPH
-            # Paragraph in a tight list: drop the wrapping <p>, but
-            # separate consecutive top-level paragraphs with a newline.
-            @out << "\n" if prev_type
+            # Paragraph in a tight list: drop the wrapping <p>. Only
+            # insert a separator `\n` when the previous child was also
+            # a tight paragraph — every other block already trails its
+            # own `\n`, so adding another would double-space the gap.
+            @out << "\n" if prev_type == NodeType::PARAGRAPH
             render_children(child_id)
           else
             # Non-paragraph block. Tight list paragraphs were emitted
