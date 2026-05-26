@@ -89,7 +89,7 @@ module Markdast
           when TokenKind::BANG_LBRACKET
             push_bracket(id, image: true)
           when TokenKind::RBRACKET
-            next_id = resolve_rbracket(id)
+            next_id = resolve_rbracket(id, id + 1)
             if next_id
               id = next_id
               next
@@ -259,7 +259,7 @@ module Markdast
         }
       end
 
-      def resolve_rbracket(rbracket_token_id)
+      def resolve_rbracket(rbracket_token_id, search_from_id)
         opener_index = nil
         i = @bracket_stack.length - 1
         while i >= 0
@@ -289,7 +289,7 @@ module Markdast
         end
 
         finalize_link(opener, opener_index, rbracket_token_id, match)
-        next_token_after(match[:end_byte])
+        next_token_after(match[:end_byte], search_from_id)
       end
 
       def try_inline_link(start_byte)
@@ -386,8 +386,8 @@ module Markdast
         end
       end
 
-      def next_token_after(byte_offset)
-        id = 0
+      def next_token_after(byte_offset, from_id)
+        id = from_id
         last = @tokens.length
         while id < last
           s = @tokens.start_byte(id)
