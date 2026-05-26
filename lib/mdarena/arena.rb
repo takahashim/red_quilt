@@ -27,6 +27,9 @@ module Mdarena
   class Arena
     NO_NODE = -1
 
+    # Raised by #check_integrity! when a structural invariant is violated.
+    class IntegrityError < StandardError; end
+
     attr_reader :source
 
     def initialize(source)
@@ -281,6 +284,76 @@ module Mdarena
     def update_span(id, start_byte, end_byte)
       @source_start[id] = start_byte
       @source_len[id] = end_byte - start_byte
+    end
+
+    # Verifies the structural invariants of the tree rooted at root_id.
+    # Raises IntegrityError on the first violation, including the
+    # offending node id(s) and a description of the broken rule.
+    #
+    # Checked invariants:
+    # - root has parent = NO_NODE
+    # - for every reachable node `n` and its first_child / last_child
+    #   `fc` / `lc`:
+    #     * fc and lc are both NO_NODE, or both not NO_NODE
+    #     * walking next_sibling from fc reaches lc and only lc
+    #     * for each child `c`, @parent[c] == n
+    #     * for each child `c`, @prev_sibling[c] equals the previously
+    #       visited sibling (or NO_NODE for the first)
+    # - no node is reached twice (no shared subtrees, no cycles)
+    #
+    # Intended for development / debugging. Not called by the production
+    # parse / render path.
+    def check_integrity!(root_id)
+      raise IntegrityError, "root_id #{root_id} has no row" if root_id >= @type.length
+      if @parent[root_id] != NO_NODE
+        raise IntegrityError, "root #{root_id} has non-NO_NODE parent #{@parent[root_id]}"
+      end
+
+      visited = {}
+      walk_for_integrity(root_id, NO_NODE, visited)
+      self
+    end
+
+    private
+
+    def walk_for_integrity(id, expected_parent_id, visited)
+      if visited[id]
+        raise IntegrityError, "node #{id} reached twice (cycle or shared subtree)"
+      end
+      visited[id] = true
+
+      actual_parent = @parent[id]
+      if actual_parent != expected_parent_id
+        raise IntegrityError,
+              "node #{id} parent mismatch: expected #{expected_parent_id}, got #{actual_parent}"
+      end
+
+      fc = @first_child[id]
+      lc = @last_child[id]
+      if (fc == NO_NODE) != (lc == NO_NODE)
+        raise IntegrityError,
+              "node #{id} first_child=#{fc} but last_child=#{lc} (one is NO_NODE, the other isn't)"
+      end
+      return if fc == NO_NODE
+
+      prev_seen = NO_NODE
+      child_id = fc
+      tail = NO_NODE
+      until child_id == NO_NODE
+        if @prev_sibling[child_id] != prev_seen
+          raise IntegrityError,
+                "node #{child_id} prev_sibling=#{@prev_sibling[child_id]} but previous in chain was #{prev_seen}"
+        end
+        walk_for_integrity(child_id, id, visited)
+        prev_seen = child_id
+        tail = child_id
+        child_id = @next_sibling[child_id]
+      end
+
+      if tail != lc
+        raise IntegrityError,
+              "node #{id} last_child=#{lc} but sibling chain from first_child=#{fc} ends at #{tail}"
+      end
     end
   end
 end

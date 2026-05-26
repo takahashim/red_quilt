@@ -700,7 +700,9 @@ RSpec.describe "CommonMark compatibility" do
 
   PASSING_EXAMPLES.each do |example|
     it "matches CommonMark 0.31.2 example #{example[:number]} (#{example[:section]})" do
-      expect(Mdarena.render_html(example[:markdown], allow_html: true)).to eq(example[:html])
+      doc = Mdarena.parse(example[:markdown], allow_html: true)
+      expect { doc.arena.check_integrity!(doc.root_id) }.not_to raise_error
+      expect(doc.to_html).to eq(example[:html])
     end
   end
 
