@@ -21,6 +21,21 @@ module Mdarena
 
     private
 
+    # Byte values that can begin a non-paragraph block (after 0-3
+    # leading spaces). Lines whose first non-space byte is NOT in this
+    # set go straight to parse_paragraph, skipping all eight specific
+    # block-start predicates.
+    #
+    # Members: `#` (ATX), ``` ` ```/`~` (fences), `*`/`-`/`+`/`_` (thematic
+    # & list markers), `0`-`9` (ordered list), `[` (ref def), `>` (blockquote),
+    # `<` (HTML block), `\t` (indented code, when a tab provides indent).
+    BLOCK_START_BYTES = begin
+      a = Array.new(256, false)
+      [0x23, 0x60, 0x7E, 0x2A, 0x2D, 0x2B, 0x5F, 0x5B, 0x3E, 0x3C, 0x09].each { |b| a[b] = true }
+      (0x30..0x39).each { |b| a[b] = true }
+      a.freeze
+    end
+
     def parse_lines(parent_id, lines, transformed:)
       index = 0
       while index < lines.length
@@ -30,12 +45,20 @@ module Mdarena
           next
         end
 
-        if (fence = fenced_code_start(line.content))
+        content = line.content
+        if paragraph_only_line?(content)
+          # Fast path: nothing in this line can possibly start a
+          # different block, so skip the eight predicate checks below.
+          index = parse_paragraph(parent_id, lines, index, transformed)
+          next
+        end
+
+        if (fence = fenced_code_start(content))
           index = parse_fenced_code(parent_id, lines, index, fence, transformed)
-        elsif (heading = atx_heading(line.content))
+        elsif (heading = atx_heading(content))
           append_heading(parent_id, line, heading, transformed)
           index += 1
-        elsif thematic_break?(line.content)
+        elsif thematic_break?(content)
           @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: span_len(line)))
           index += 1
         elsif (reference = link_reference_definition(lines, index))
@@ -43,18 +66,41 @@ module Mdarena
           index += reference[:consumed]
         elsif table_start?(lines, index)
           index = parse_table(parent_id, lines, index, transformed)
-        elsif html_block_start?(line.content)
+        elsif html_block_start?(content)
           index = parse_html_block(parent_id, lines, index, transformed)
-        elsif blockquote_line?(line.content)
+        elsif blockquote_line?(content)
           index = parse_blockquote(parent_id, lines, index)
-        elsif list_item_start(line.content)
+        elsif list_item_start(content)
           index = parse_list(parent_id, lines, index)
-        elsif indented_code_line?(line.content)
+        elsif indented_code_line?(content)
           index = parse_indented_code(parent_id, lines, index, transformed)
         else
           index = parse_paragraph(parent_id, lines, index, transformed)
         end
       end
+    end
+
+    # Returns true when `content` cannot start any non-paragraph block,
+    # so the slow predicate fan-out in parse_lines can be skipped. The
+    # check is intentionally conservative: anything ambiguous returns
+    # false and falls through to the full dispatch.
+    def paragraph_only_line?(content)
+      bytes = content.bytesize
+      i = 0
+      # Up to 3 leading spaces are still part of the block prefix; 4+
+      # means indented code, which IS a block start.
+      while i < 3 && i < bytes && content.getbyte(i) == 0x20
+        i += 1
+      end
+      return false if i >= bytes
+      first = content.getbyte(i)
+      # 4+ leading spaces? Treat as indented code candidate.
+      return false if i == 3 && first == 0x20
+      # The first non-space byte gates every block start we recognise.
+      return false if BLOCK_START_BYTES[first]
+      # Table rows always contain `|`; quick C-level scan covers them.
+      return false if content.include?("|")
+      true
     end
 
     def parse_blockquote(parent_id, lines, index)
