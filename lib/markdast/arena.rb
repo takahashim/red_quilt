@@ -53,6 +53,82 @@ module Markdast
       child_id
     end
 
+    # Inserts new_id immediately before ref_id in parent_id's child list.
+    def insert_before(parent_id, ref_id, new_id)
+      @parent[new_id] = parent_id
+      prev_ref = @prev_sibling[ref_id]
+      @prev_sibling[new_id] = prev_ref
+      @next_sibling[new_id] = ref_id
+      @prev_sibling[ref_id] = new_id
+      if prev_ref == -1
+        @first_child[parent_id] = new_id
+      else
+        @next_sibling[prev_ref] = new_id
+      end
+      new_id
+    end
+
+    # Removes child_id from its current parent. The node still exists in
+    # the arena but has no parent and no siblings.
+    def detach(child_id)
+      parent_id = @parent[child_id]
+      prev_id = @prev_sibling[child_id]
+      next_id = @next_sibling[child_id]
+
+      if prev_id == -1
+        @first_child[parent_id] = next_id
+      else
+        @next_sibling[prev_id] = next_id
+      end
+
+      if next_id == -1
+        @last_child[parent_id] = prev_id
+      else
+        @prev_sibling[next_id] = prev_id
+      end
+
+      @parent[child_id] = -1
+      @prev_sibling[child_id] = -1
+      @next_sibling[child_id] = -1
+      child_id
+    end
+
+    # Moves a contiguous sibling range [first_id .. last_id] (both inclusive,
+    # walking #next_sibling from first to last) under new_parent_id, replacing
+    # any existing children there.
+    def reparent(new_parent_id, first_id, last_id)
+      return if first_id == -1 || last_id == -1
+
+      original_parent = @parent[first_id]
+      prev_of_first = @prev_sibling[first_id]
+      next_of_last = @next_sibling[last_id]
+
+      if prev_of_first == -1
+        @first_child[original_parent] = next_of_last
+      else
+        @next_sibling[prev_of_first] = next_of_last
+      end
+
+      if next_of_last == -1
+        @last_child[original_parent] = prev_of_first
+      else
+        @prev_sibling[next_of_last] = prev_of_first
+      end
+
+      @prev_sibling[first_id] = -1
+      @next_sibling[last_id] = -1
+
+      id = first_id
+      loop do
+        @parent[id] = new_parent_id
+        break if id == last_id
+        id = @next_sibling[id]
+      end
+
+      @first_child[new_parent_id] = first_id
+      @last_child[new_parent_id] = last_id
+    end
+
     def type(id)
       @type[id]
     end

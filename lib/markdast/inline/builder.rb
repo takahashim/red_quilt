@@ -18,10 +18,13 @@ module Markdast
         @references = references
       end
 
+      SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
+
       def build(parent_id, tokens)
         @parent_id = parent_id
         @tokens = tokens
         @delimiter_stack = []
+        @bracket_stack = []
         linear_pass
         process_emphasis
       end
@@ -55,11 +58,222 @@ module Markdast
             end
             # No matching closer: the backtick run is plain text.
             append_text(@tokens.start_byte(id), @tokens.end_byte(id), nil)
+          when TokenKind::LBRACKET
+            push_bracket(id, image: false)
+          when TokenKind::BANG_LBRACKET
+            push_bracket(id, image: true)
+          when TokenKind::RBRACKET
+            next_id = resolve_rbracket(id)
+            if next_id
+              id = next_id
+              next
+            end
           else
-            # DELIM_RUN / brackets are handled in commits 7-8.
+            # DELIM_RUN is handled in commit 8.
           end
           id += 1
         end
+      end
+
+      def push_bracket(token_id, image:)
+        start_byte = @tokens.start_byte(token_id)
+        end_byte = @tokens.end_byte(token_id)
+        text = image ? "![" : "["
+        node_id = @arena.add_node(
+          NodeType::TEXT,
+          source_start: start_byte,
+          source_len: end_byte - start_byte,
+          str1: text
+        )
+        @arena.append_child(@parent_id, node_id)
+        @bracket_stack << {
+          token_id: token_id,
+          node_id: node_id,
+          image: image,
+          active: true
+        }
+      end
+
+      # Returns the next token id to resume at, or nil to let the caller
+      # advance by one (treating `]` as plain text).
+      def resolve_rbracket(rbracket_token_id)
+        opener_index = nil
+        i = @bracket_stack.length - 1
+        while i >= 0
+          if @bracket_stack[i][:active]
+            opener_index = i
+            break
+          end
+          i -= 1
+        end
+
+        unless opener_index
+          append_text(@tokens.start_byte(rbracket_token_id),
+                      @tokens.end_byte(rbracket_token_id), "]")
+          return nil
+        end
+
+        opener = @bracket_stack[opener_index]
+        rbracket_end = @tokens.end_byte(rbracket_token_id)
+
+        match = try_inline_link(rbracket_end) ||
+                try_reference_link(opener, rbracket_token_id, rbracket_end)
+        unless match
+          @bracket_stack.delete_at(opener_index)
+          append_text(@tokens.start_byte(rbracket_token_id),
+                      @tokens.end_byte(rbracket_token_id), "]")
+          return nil
+        end
+
+        finalize_link(opener, opener_index, rbracket_token_id, match)
+        next_token_after(match[:end_byte])
+      end
+
+      # Looks at @source starting just after the `]`. If it begins with `(`,
+      # parses `(destination[ "title"])` and returns
+      #   { end_byte:, destination:, title: }
+      # otherwise nil.
+      def try_inline_link(start_byte)
+        return nil if start_byte >= @source.bytesize
+        return nil unless @source.getbyte(start_byte) == 0x28 # (
+
+        body_start = start_byte + 1
+        depth = 1
+        index = body_start
+        while index < @source.bytesize
+          b = @source.getbyte(index)
+          if b == 0x28
+            depth += 1
+          elsif b == 0x29
+            depth -= 1
+            break if depth.zero?
+          elsif b == 0x0A
+            # Inline destinations can't span paragraph breaks; rather than
+            # try to be clever, treat this as no-match.
+            return nil
+          end
+          index += 1
+        end
+        return nil unless depth.zero?
+
+        body = @source.byteslice(body_start, index - body_start).to_s
+        destination, title = split_destination_and_title(body)
+        return nil if destination.nil? || destination.empty?
+
+        {
+          end_byte: index + 1,
+          destination: destination,
+          title: title
+        }
+      end
+
+      # Reference forms (full / collapsed / shortcut) starting just after `]`.
+      def try_reference_link(opener, rbracket_token_id, start_byte)
+        label_start = @tokens.end_byte(opener[:token_id])
+        label_end = @tokens.start_byte(rbracket_token_id)
+        text_label = @source.byteslice(label_start, label_end - label_start).to_s
+
+        if start_byte < @source.bytesize && @source.getbyte(start_byte) == 0x5B # [
+          ref_label, after_byte = read_reference_label(start_byte)
+          return nil unless after_byte
+          lookup = ref_label.empty? ? text_label : ref_label
+          ref = @references[normalize_reference_label(lookup)]
+          return nil unless ref
+          return { end_byte: after_byte, destination: ref[:destination], title: ref[:title] }
+        end
+
+        # Shortcut form: just `[label]`
+        ref = @references[normalize_reference_label(text_label)]
+        return nil unless ref
+        { end_byte: start_byte, destination: ref[:destination], title: ref[:title] }
+      end
+
+      # Reads a `[label]` starting at start_byte. Returns [label, end_byte]
+      # where end_byte is one past the closing `]`, or [nil, nil].
+      def read_reference_label(start_byte)
+        return [nil, nil] unless @source.getbyte(start_byte) == 0x5B
+
+        i = start_byte + 1
+        while i < @source.bytesize
+          b = @source.getbyte(i)
+          if b == 0x5D # ]
+            return [@source.byteslice(start_byte + 1, i - start_byte - 1).to_s, i + 1]
+          elsif b == 0x5C && i + 1 < @source.bytesize
+            i += 2
+            next
+          end
+          i += 1
+        end
+        [nil, nil]
+      end
+
+      def finalize_link(opener, opener_index, rbracket_token_id, match)
+        opener_start_byte = @tokens.start_byte(opener[:token_id])
+        link_kind = opener[:image] ? NodeType::IMAGE : NodeType::LINK
+        link_id = @arena.add_node(
+          link_kind,
+          source_start: opener_start_byte,
+          source_len: match[:end_byte] - opener_start_byte,
+          str1: sanitize_destination(match[:destination]),
+          str2: match[:title]
+        )
+
+        # Insert the new node right before the opener's provisional TEXT so
+        # that any content between opener and the new node's eventual end
+        # stays in document order.
+        @arena.insert_before(@parent_id, opener[:node_id], link_id)
+
+        # All content between opener[:node_id] and the parent's last_child
+        # (exclusive of opener[:node_id] itself) belongs inside the link.
+        first_inside = @arena.next_sibling(opener[:node_id])
+        last_inside = @arena.last_child(@parent_id)
+        if first_inside != -1 && last_inside != -1 && first_inside != link_id
+          @arena.reparent(link_id, first_inside, last_inside)
+        end
+
+        # Drop the opener's provisional TEXT node.
+        @arena.detach(opener[:node_id])
+
+        @bracket_stack.delete_at(opener_index)
+
+        # Per spec: once a link is formed, any earlier `[` brackets become
+        # inactive so they can't open a nested link. Image brackets are
+        # unaffected.
+        unless opener[:image]
+          @bracket_stack.each { |b| b[:active] = false unless b[:image] }
+        end
+      end
+
+      def next_token_after(byte_offset)
+        # Find the first token whose start_byte >= byte_offset.
+        id = 0
+        last = @tokens.length
+        while id < last
+          return id if @tokens.start_byte(id) >= byte_offset
+          id += 1
+        end
+        last
+      end
+
+      def split_destination_and_title(body)
+        match = /\A(\S+)\s+"([^"]*)"\z/.match(body)
+        return [match[1], match[2]] if match
+        [body.strip, nil]
+      end
+
+      def sanitize_destination(destination)
+        return "" if destination.nil?
+        return destination if destination.start_with?("/", "#")
+
+        scheme = destination[%r{\A([a-zA-Z][a-zA-Z0-9+\-.]*):}, 1]
+        return destination if scheme.nil?
+        return destination if SAFE_SCHEMES.include?(scheme.downcase)
+
+        ""
+      end
+
+      def normalize_reference_label(label)
+        label.to_s.strip.downcase.gsub(/[ \t\r\n]+/, " ")
       end
 
       # Try to close the CODE_DELIMITER token at opener_id with a later
@@ -114,7 +328,7 @@ module Markdast
       def append_text(start_byte, end_byte, literal)
         last = @arena.last_child(@parent_id)
         if last != -1 && @arena.type(last) == NodeType::TEXT &&
-           adjacent?(last, start_byte)
+           adjacent?(last, start_byte) && !bracket_node?(last)
           merge_text(last, literal, start_byte, end_byte)
           return
         end
@@ -126,6 +340,14 @@ module Markdast
           str1: literal
         )
         @arena.append_child(@parent_id, node)
+      end
+
+      # Provisional `[` / `![` TEXT nodes still living on the bracket stack
+      # must not be merged with neighboring text, otherwise the link label
+      # would be absorbed into the opener and lost when finalize_link
+      # detaches the opener node.
+      def bracket_node?(node_id)
+        @bracket_stack.any? { |b| b[:node_id] == node_id }
       end
 
       # Two TEXT nodes can be merged when the previous one is adjacent in

@@ -240,4 +240,139 @@ RSpec.describe Markdast::Inline::Builder do
       end
     end
   end
+
+  describe "inline links" do
+    def lex(src)
+      tokens.clear
+      Markdast::Inline::Lexer.new(src).lex_into(tokens, 0, src.bytesize)
+      tokens
+    end
+
+    context "basic `[label](url)`" do
+      let(:source) { "[foo](https://example.com)" }
+
+      it "emits a LINK node with the label as a TEXT child" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:link])
+
+        link = arena.first_child(paragraph_id)
+        expect(arena.str1(link)).to eq("https://example.com")
+        expect(child_text_kinds(link)).to eq([:text])
+        text = arena.first_child(link)
+        expect(arena.text(text)).to eq("foo")
+      end
+    end
+
+    context "link with title" do
+      let(:source) { %([foo](https://example.com "t")) }
+
+      it "stores destination in str1 and title in str2" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        link = arena.first_child(paragraph_id)
+        expect(arena.str1(link)).to eq("https://example.com")
+        expect(arena.str2(link)).to eq("t")
+      end
+    end
+
+    context "unmatched `]`" do
+      let(:source) { "foo]bar" }
+
+      it "renders the bracket as plain text" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:text])
+        expect(arena.text(arena.first_child(paragraph_id))).to eq("foo]bar")
+      end
+    end
+
+    context "image syntax `![alt](url)`" do
+      let(:source) { "![alt](https://img.test/x.png)" }
+
+      it "emits an IMAGE node with the alt as a TEXT child" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:image])
+
+        img = arena.first_child(paragraph_id)
+        expect(arena.str1(img)).to eq("https://img.test/x.png")
+        text = arena.first_child(img)
+        expect(arena.text(text)).to eq("alt")
+      end
+    end
+
+    context "unsafe URL scheme is dropped" do
+      let(:source) { "[x](javascript:alert(1))" }
+
+      it "produces a LINK with an empty destination" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        link = arena.first_child(paragraph_id)
+        expect(arena.str1(link)).to eq("")
+      end
+    end
+  end
+
+  describe "reference links" do
+    def lex(src)
+      tokens.clear
+      Markdast::Inline::Lexer.new(src).lex_into(tokens, 0, src.bytesize)
+      tokens
+    end
+
+    let(:references) do
+      { "ref" => { destination: "https://ref.example", title: "T" } }
+    end
+
+    context "shortcut `[ref]`" do
+      let(:source) { "[ref]" }
+
+      it "resolves the reference and emits a LINK" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        link = arena.first_child(paragraph_id)
+        expect(arena.str1(link)).to eq("https://ref.example")
+        expect(arena.str2(link)).to eq("T")
+      end
+    end
+
+    context "full `[text][ref]`" do
+      let(:source) { "[anchor][ref]" }
+
+      it "uses the reference label, not the anchor text, for lookup" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        link = arena.first_child(paragraph_id)
+        expect(arena.str1(link)).to eq("https://ref.example")
+      end
+    end
+
+    context "collapsed `[ref][]`" do
+      let(:source) { "[ref][]" }
+
+      it "uses the anchor label when the secondary label is empty" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        link = arena.first_child(paragraph_id)
+        expect(arena.str1(link)).to eq("https://ref.example")
+      end
+    end
+
+    context "missing reference falls back to text" do
+      let(:source) { "[unknown]" }
+
+      it "leaves the brackets as plain text" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        # `[` and `]` remain as text nodes, content between them is also text
+        expect(kinds.first).to eq(:text)
+        expect(arena.text(arena.first_child(paragraph_id))).to eq("[")
+      end
+    end
+  end
 end
