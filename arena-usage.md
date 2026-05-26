@@ -56,6 +56,15 @@ children of paragraph:
   emphasis: "*world*"
 ```
 
+このサンプルが作る AST:
+
+```
+PARAGRAPH    [0, 13)   "Hello *world*"
+├─ TEXT      [0, 6)    "Hello "
+└─ EMPHASIS  [6, 13)   "*world*"
+   └─ TEXT   [7, 12)   "world"
+```
+
 ポイント:
 
 - `add_node` は **node id (Integer)** を返す。以降の API は全部この id をキーにする
