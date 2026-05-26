@@ -13,6 +13,8 @@ FIXTURES = {
 
   long_paragraph: "Lorem " + ("*ipsum* dolor " * 100) + "sit amet.",
 
+  readme: File.read(File.join(__dir__, "../README.md")),
+
   nested_emphasis: "*foo **bar *baz* bim** bop*" * 50,
 
   many_links: "[link](/url \"title\")" * 100,
