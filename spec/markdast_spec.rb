@@ -355,5 +355,47 @@ RSpec.describe Markdast do
       expect(html).to include("<ul>")
       expect(html).to include("<li>")
     end
+
+    describe "multibyte character handling" do
+      # Regression tests for Phase 9-A: Unicode byte offset bug.
+      # InlineScanner uses character indices but Arena#text uses byteslice,
+      # so mixing char-based and byte-based offsets corrupted HTML output
+      # for Cyrillic / CJK / other multi-byte input.
+
+      it "renders Cyrillic emphasis without HTML corruption" do
+        expect(described_class.render_html("_пристаням_стремятся"))
+          .to eq("<p><em>пристаням</em>стремятся</p>\n")
+      end
+
+      it "renders Japanese emphasis without HTML corruption" do
+        expect(described_class.render_html("日本語の*強調*テスト"))
+          .to eq("<p>日本語の<em>強調</em>テスト</p>\n")
+      end
+
+      it "renders mixed ASCII and CJK emphasis" do
+        expect(described_class.render_html("*emphasis* with *日本語*"))
+          .to eq("<p><em>emphasis</em> with <em>日本語</em></p>\n")
+      end
+
+      it "renders strong emphasis with multibyte content" do
+        expect(described_class.render_html("**強い強調**と通常文"))
+          .to eq("<p><strong>強い強調</strong>と通常文</p>\n")
+      end
+
+      it "renders triple emphasis with multibyte content" do
+        expect(described_class.render_html("***中文***test"))
+          .to eq("<p><em><strong>中文</strong></em>test</p>\n")
+      end
+
+      it "renders code spans with multibyte content" do
+        expect(described_class.render_html("文字列`コード`テスト"))
+          .to eq("<p>文字列<code>コード</code>テスト</p>\n")
+      end
+
+      it "renders links with multibyte link text" do
+        expect(described_class.render_html("[日本語リンク](https://example.com)"))
+          .to eq("<p><a href=\"https://example.com\">日本語リンク</a></p>\n")
+      end
+    end
   end
 end
