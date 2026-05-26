@@ -36,6 +36,8 @@ module Mdarena
       a.freeze
     end
 
+    TITLE_CLOSERS = { '"' => '"', "'" => "'", "(" => ")" }.freeze
+
     # parse_lines returns true if it encountered a blank line BETWEEN
     # two block-level constructs at this scope. parse_list uses that to
     # decide an item's looseness — the spec says an item is loose when
@@ -1325,7 +1327,7 @@ module Mdarena
     end
 
     def reference_title_closer(opener)
-      { '"' => '"', "'" => "'", "(" => ")" }[opener]
+      TITLE_CLOSERS[opener]
     end
 
     def unescape_reference_text(text)

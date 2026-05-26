@@ -15,6 +15,13 @@ module Mdarena
     #      delimiter stack entries into EMPHASIS / STRONG nodes.
     class Builder
       SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
+      NIL_PAIR = [nil, nil].freeze
+      URL_SAFE_BYTE = begin
+        a = Array.new(256, false)
+        "-._~:/?#@!$&'()*+,;=".each_byte { |b| a[b] = true }
+        a.freeze
+      end
+      TRAILING_SPACE_RE = (1..8).map { |n| / {#{n},}\z/.freeze }.freeze
 
       class Delimiter
         attr_accessor :node_id, :char, :count, :can_open, :can_close
@@ -596,13 +603,11 @@ end
           (b >= 0x61 && b <= 0x66)
       end
 
-      URL_SAFE_EXTRA_BYTES = "-._~:/?#@!$&'()*+,;=".each_byte.to_a.freeze
-
       def url_safe_byte?(b)
         return true if b >= 0x30 && b <= 0x39
         return true if b >= 0x41 && b <= 0x5A
         return true if b >= 0x61 && b <= 0x7A
-        URL_SAFE_EXTRA_BYTES.include?(b)
+        URL_SAFE_BYTE[b]
       end
 
       def try_reference_link(opener, rbracket_token_id, start_byte)
@@ -643,7 +648,7 @@ end
       end
 
       def read_reference_label(start_byte)
-        return [nil, nil] unless @source.getbyte(start_byte) == 0x5B
+        return NIL_PAIR unless @source.getbyte(start_byte) == 0x5B
 
         i = start_byte + 1
         while i < @source.bytesize
@@ -652,14 +657,14 @@ end
             return [@source.byteslice(start_byte + 1, i - start_byte - 1).to_s, i + 1]
           elsif b == 0x5B
             # An unescaped `[` inside a reference label voids the form.
-            return [nil, nil]
+            return NIL_PAIR
           elsif b == 0x5C && i + 1 < @source.bytesize
             i += 2
             next
           end
           i += 1
         end
-        [nil, nil]
+        NIL_PAIR
       end
 
       def finalize_link(opener, opener_index, rbracket_token_id, match)
@@ -749,7 +754,8 @@ end
         count = @tokens.int2(token_id)
         flags = @tokens.int3(token_id)
 
-        text = char_byte.chr * count
+        char = char_byte.chr
+        text = char * count
         node_id = add_arena_node(
           NodeType::TEXT,
           @tokens.start_byte(token_id), @tokens.end_byte(token_id),
@@ -759,7 +765,7 @@ end
         @provisional_nodes[node_id] = true
 
         @delimiter_stack << Delimiter.new(
-          node_id, char_byte.chr, count,
+          node_id, char, count,
           (flags & 0b10) != 0,
           (flags & 0b01) != 0
         )
