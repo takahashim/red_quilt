@@ -273,7 +273,10 @@ module Mdarena
       return true if atx_heading(line.content)
       return true if thematic_break?(line.content)
       return true if fenced_code_start(line.content)
-      return true if html_block_start?(line.content)
+      # HTML type 7 doesn't break lazy continuation either.
+      if (type = html_block_type(line.content)) && type != 7
+        return true
+      end
       return true if blockquote_line?(line.content)
       if (li = list_item_start(line.content)) && list_item_interrupts_paragraph?(li)
         return true
@@ -544,7 +547,11 @@ module Mdarena
       return true if atx_heading(line.content)
       return true if thematic_break?(line.content)
       return true if fenced_code_start(line.content)
-      return true if html_block_start?(line.content)
+      # CommonMark: HTML block types 1–6 interrupt paragraphs; type 7
+      # (a bare valid tag on its own line) does not.
+      if (type = html_block_type(line.content)) && type != 7
+        return true
+      end
       return true if blockquote_line?(line.content)
       if (li = list_item_start(line.content)) && list_item_interrupts_paragraph?(li)
         return true

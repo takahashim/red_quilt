@@ -853,6 +853,7 @@ RSpec.describe "CommonMark compatibility" do
     { number: 182, section: "HTML blocks", markdown: "<![CDATA[\nfunction matchwo(a,b)\n{\n  if (a < b && a < 0) then {\n    return 1;\n\n  } else {\n\n    return 0;\n  }\n}\n]]>\nokay\n", html: "<![CDATA[\nfunction matchwo(a,b)\n{\n  if (a < b && a < 0) then {\n    return 1;\n\n  } else {\n\n    return 0;\n  }\n}\n]]>\n<p>okay</p>\n" },
     { number: 194, section: "Link reference definitions", markdown: "[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n", html: "<p><a href=\"my_(url)\" title=\"title (with parens)\">Foo*bar]</a></p>\n" },
     { number: 201, section: "Link reference definitions", markdown: "[foo]: <bar>(baz)\n\n[foo]\n", html: "<p>[foo]: <bar>(baz)</p>\n<p>[foo]</p>\n" },
+    { number: 187, section: "HTML blocks", markdown: "Foo\n<a href=\"bar\">\nbaz\n", html: "<p>Foo\n<a href=\"bar\">\nbaz</p>\n" },
   ].freeze
 
   KNOWN_GAPS = [].freeze
