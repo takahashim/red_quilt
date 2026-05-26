@@ -47,11 +47,64 @@ module Markdast
           when TokenKind::AUTOLINK_EMAIL
             email = @tokens.str1(id)
             append_autolink(id, "mailto:#{email}", email)
+          when TokenKind::CODE_DELIMITER
+            next_id = resolve_code_span(id)
+            if next_id
+              id = next_id
+              next
+            end
+            # No matching closer: the backtick run is plain text.
+            append_text(@tokens.start_byte(id), @tokens.end_byte(id), nil)
           else
-            # CODE_DELIMITER / DELIM_RUN / brackets are handled in commits 6-8.
+            # DELIM_RUN / brackets are handled in commits 7-8.
           end
           id += 1
         end
+      end
+
+      # Try to close the CODE_DELIMITER token at opener_id with a later
+      # CODE_DELIMITER of the same run length. On success emits a CODE_SPAN
+      # node and returns the token index immediately after the closer.
+      # On failure returns nil so the caller can treat the opener as TEXT.
+      def resolve_code_span(opener_id)
+        run_len = @tokens.int1(opener_id)
+        search_id = opener_id + 1
+        total = @tokens.length
+        while search_id < total
+          if @tokens.kind(search_id) == TokenKind::CODE_DELIMITER &&
+             @tokens.int1(search_id) == run_len
+            emit_code_span(opener_id, search_id)
+            return search_id + 1
+          end
+          search_id += 1
+        end
+        nil
+      end
+
+      def emit_code_span(opener_id, closer_id)
+        body_start = @tokens.end_byte(opener_id)
+        body_end = @tokens.start_byte(closer_id)
+        span_start = @tokens.start_byte(opener_id)
+        span_end = @tokens.end_byte(closer_id)
+        raw = @source.byteslice(body_start, body_end - body_start).to_s
+        node = @arena.add_node(
+          NodeType::CODE_SPAN,
+          source_start: span_start,
+          source_len: span_end - span_start,
+          str1: normalize_code_span(raw)
+        )
+        @arena.append_child(@parent_id, node)
+      end
+
+      # CommonMark code span normalization: newlines become spaces; if the
+      # resulting string has both a leading and trailing space and at least
+      # one non-space character, one of each is removed.
+      def normalize_code_span(text)
+        text = text.tr("\n", " ")
+        if text.length >= 2 && text.start_with?(" ") && text.end_with?(" ") && text.match?(/[^ ]/)
+          text = text[1..-2]
+        end
+        text
       end
 
       def process_emphasis

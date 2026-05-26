@@ -177,4 +177,67 @@ RSpec.describe Markdast::Inline::Builder do
       end
     end
   end
+
+  describe "CODE_SPAN" do
+    # Convenience: lex via the real Lexer so token offsets are correct.
+    def lex(src)
+      tokens.clear
+      Markdast::Inline::Lexer.new(src).lex_into(tokens, 0, src.bytesize)
+      tokens
+    end
+
+    context "simple `code`" do
+      let(:source) { "a`code`b" }
+
+      it "emits a CODE_SPAN node and skips inner tokens" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:text, :code_span, :text])
+
+        cs = arena.first_child(paragraph_id)
+        cs = arena.next_sibling(cs)
+        expect(arena.str1(cs)).to eq("code")
+      end
+    end
+
+    context "multi-backtick `` foo ` bar ``" do
+      let(:source) { "`` foo ` bar ``" }
+
+      it "matches by run length and trims one leading + trailing space" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:code_span])
+
+        cs = arena.first_child(paragraph_id)
+        expect(arena.str1(cs)).to eq("foo ` bar")
+      end
+    end
+
+    context "unmatched single backtick" do
+      let(:source) { "a`b" }
+
+      it "leaves the backtick as plain text" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:text])
+        expect(arena.text(arena.first_child(paragraph_id))).to eq("a`b")
+      end
+    end
+
+    context "code span containing `*` is not interpreted as emphasis" do
+      let(:source) { "`*foo*`" }
+
+      it "treats the asterisks as plain code content" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:code_span])
+        cs = arena.first_child(paragraph_id)
+        expect(arena.str1(cs)).to eq("*foo*")
+      end
+    end
+  end
 end
