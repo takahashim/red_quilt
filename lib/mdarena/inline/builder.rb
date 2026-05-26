@@ -17,16 +17,12 @@ module Mdarena
       SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
 
       class Delimiter
-        attr_accessor :node_id, :char, :count, :orig_count, :can_open, :can_close
+        attr_accessor :node_id, :char, :count, :can_open, :can_close
 
         def initialize(node_id, char, count, can_open, can_close)
           @node_id = node_id
           @char = char
           @count = count
-          # orig_count survives partial consumption; used as the stable
-          # key for openers_bottom and as the spec's `origdelims` for the
-          # odd-match (multiples-of-3) rule.
-          @orig_count = count
           @can_open = can_open
           @can_close = can_close
         end
@@ -754,20 +750,13 @@ end
       end
 
       def process_emphasis(stack)
-        # CommonMark spec 6.2 `openers_bottom`: when a closer fails to
-        # find a matching opener, no earlier opener can match a future
-        # closer with the same character and origdelims % 3. Recording
-        # that floor keeps the inner search O(n) amortized instead of
-        # O(stack^2).
-        #
-        # Keys: char ("*", "_", "~") + closer.orig_count % 3 (0/1/2).
-        # Values: a stack index; openers strictly above this index are
-        # still candidates.
-        openers_bottom = {
-          "*" => [-1, -1, -1],
-          "_" => [-1, -1, -1],
-          "~" => [-1, -1, -1]
-        }
+        # NB: the CommonMark spec describes an `openers_bottom`
+        # optimization keyed by closer character / length / flanking
+        # flags. Implementing that correctly is subtle (a single
+        # per-character bottom blocks valid matches like
+        # `*foo**bar**baz*`), so the implementation here just walks
+        # back to the start of the stack for every closer. This is
+        # O(stack^2) in the worst case but stacks are tiny in practice.
         closer_idx = 0
 
         while closer_idx < stack.length
@@ -777,20 +766,15 @@ end
             next
           end
 
-          closer_key = closer.orig_count % 3
-          bottom = openers_bottom[closer.char][closer_key]
           opener_idx = closer_idx - 1
           found = false
-          while opener_idx > bottom
+          while opener_idx >= 0
             opener = stack[opener_idx]
             if opener.can_open && opener.char == closer.char
-              # Spec uses origdelims (immutable) for the multiples-of-3
-              # rule so partial consumption of either side doesn't
-              # change whether the pair is allowed.
               skip = false
               if (opener.can_close || closer.can_open) &&
-                 ((opener.orig_count + closer.orig_count) % 3).zero? &&
-                 !((opener.orig_count % 3).zero? && (closer.orig_count % 3).zero?)
+                 ((opener.count + closer.count) % 3).zero? &&
+                 !((opener.count % 3).zero? && (closer.count % 3).zero?)
                 skip = true
               end
               unless skip
@@ -802,7 +786,6 @@ end
           end
 
           unless found
-            openers_bottom[closer.char][closer_key] = closer_idx - 1
             unless closer.can_open
               @provisional_nodes.delete(closer.node_id)
               stack.delete_at(closer_idx)
