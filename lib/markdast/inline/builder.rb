@@ -14,6 +14,30 @@ module Markdast
     class Builder
       SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
 
+      class Delimiter
+        attr_accessor :node_id, :char, :count, :can_open, :can_close
+
+        def initialize(node_id, char, count, can_open, can_close)
+          @node_id = node_id
+          @char = char
+          @count = count
+          @can_open = can_open
+          @can_close = can_close
+        end
+      end
+
+      class Bracket
+        attr_accessor :token_id, :node_id, :image, :active, :delim_stack_size
+
+        def initialize(token_id, node_id, image, active, delim_stack_size)
+          @token_id = token_id
+          @node_id = node_id
+          @image = image
+          @active = active
+          @delim_stack_size = delim_stack_size
+        end
+      end
+
       # track_source: when true, arena nodes carry the byte ranges supplied
       # by the lexer. When false (used for inputs whose source has been
       # materialized into a separate string, e.g. transformed blockquote
@@ -250,20 +274,14 @@ module Markdast
         )
         @arena.append_child(@parent_id, node_id)
         @provisional_nodes[node_id] = true
-        @bracket_stack << {
-          token_id: token_id,
-          node_id: node_id,
-          image: image,
-          active: true,
-          delim_stack_size: @delimiter_stack.length
-        }
+        @bracket_stack << Bracket.new(token_id, node_id, image, true, @delimiter_stack.length)
       end
 
       def resolve_rbracket(rbracket_token_id, search_from_id)
         opener_index = nil
         i = @bracket_stack.length - 1
         while i >= 0
-          if @bracket_stack[i][:active]
+          if @bracket_stack[i].active
             opener_index = i
             break
           end
@@ -321,7 +339,7 @@ module Markdast
       end
 
       def try_reference_link(opener, rbracket_token_id, start_byte)
-        label_start = @tokens.end_byte(opener[:token_id])
+        label_start = @tokens.end_byte(opener.token_id)
         label_end = @tokens.start_byte(rbracket_token_id)
         text_label = @source.byteslice(label_start, label_end - label_start).to_s
 
@@ -357,32 +375,32 @@ module Markdast
       end
 
       def finalize_link(opener, opener_index, rbracket_token_id, match)
-        opener_start = @tokens.start_byte(opener[:token_id])
-        link_kind = opener[:image] ? NodeType::IMAGE : NodeType::LINK
+        opener_start = @tokens.start_byte(opener.token_id)
+        link_kind = opener.image ? NodeType::IMAGE : NodeType::LINK
         link_id = add_arena_node(
           link_kind, opener_start, match[:end_byte],
           str1: sanitize_destination(match[:destination]),
           str2: match[:title]
         )
 
-        @arena.insert_before(@parent_id, opener[:node_id], link_id)
+        @arena.insert_before(@parent_id, opener.node_id, link_id)
 
-        first_inside = @arena.next_sibling(opener[:node_id])
+        first_inside = @arena.next_sibling(opener.node_id)
         last_inside = @arena.last_child(@parent_id)
         if first_inside != -1 && last_inside != -1 && first_inside != link_id
           @arena.reparent(link_id, first_inside, last_inside)
         end
 
-        @provisional_nodes.delete(opener[:node_id])
-        @arena.detach(opener[:node_id])
+        @provisional_nodes.delete(opener.node_id)
+        @arena.detach(opener.node_id)
 
-        inner_delims = @delimiter_stack.slice!(opener[:delim_stack_size]..) || []
+        inner_delims = @delimiter_stack.slice!(opener.delim_stack_size..) || []
         process_emphasis(inner_delims)
 
         @bracket_stack.delete_at(opener_index)
 
-        unless opener[:image]
-          @bracket_stack.each { |b| b[:active] = false unless b[:image] }
+        unless opener.image
+          @bracket_stack.each { |b| b.active = false unless b.image }
         end
       end
 
@@ -440,13 +458,11 @@ module Markdast
         @arena.append_child(@parent_id, node_id)
         @provisional_nodes[node_id] = true
 
-        @delimiter_stack << {
-          node_id: node_id,
-          char: char_byte.chr,
-          count: count,
-          can_open: (flags & 0b10) != 0,
-          can_close: (flags & 0b01) != 0
-        }
+        @delimiter_stack << Delimiter.new(
+          node_id, char_byte.chr, count,
+          (flags & 0b10) != 0,
+          (flags & 0b01) != 0
+        )
       end
 
       def process_emphasis(stack)
@@ -455,20 +471,20 @@ module Markdast
 
         while closer_idx < stack.length
           closer = stack[closer_idx]
-          unless closer[:can_close]
+          unless closer.can_close
             closer_idx += 1
             next
           end
 
           opener_idx = closer_idx - 1
           found = false
-          while opener_idx > openers_bottom[closer[:char]]
+          while opener_idx > openers_bottom[closer.char]
             opener = stack[opener_idx]
-            if opener[:can_open] && opener[:char] == closer[:char]
+            if opener.can_open && opener.char == closer.char
               skip = false
-              if (opener[:can_close] || closer[:can_open]) &&
-                 ((opener[:count] + closer[:count]) % 3).zero? &&
-                 !((opener[:count] % 3).zero? && (closer[:count] % 3).zero?)
+              if (opener.can_close || closer.can_open) &&
+                 ((opener.count + closer.count) % 3).zero? &&
+                 !((opener.count % 3).zero? && (closer.count % 3).zero?)
                 skip = true
               end
               unless skip
@@ -480,9 +496,9 @@ module Markdast
           end
 
           unless found
-            openers_bottom[closer[:char]] = closer_idx - 1
-            unless closer[:can_open]
-              @provisional_nodes.delete(closer[:node_id])
+            openers_bottom[closer.char] = closer_idx - 1
+            unless closer.can_open
+              @provisional_nodes.delete(closer.node_id)
               stack.delete_at(closer_idx)
             end
             closer_idx += 1
@@ -490,11 +506,11 @@ module Markdast
           end
 
           opener = stack[opener_idx]
-          strength = [opener[:count], closer[:count]].min >= 2 ? 2 : 1
+          strength = [opener.count, closer.count].min >= 2 ? 2 : 1
           kind = strength == 2 ? NodeType::STRONG : NodeType::EMPHASIS
 
-          opener_node = opener[:node_id]
-          closer_node = closer[:node_id]
+          opener_node = opener.node_id
+          closer_node = closer.node_id
 
           if @track_source
             opener_match_start = @arena.source_start(opener_node) +
@@ -516,13 +532,13 @@ module Markdast
           parent_id = @arena.parent(opener_node)
           @arena.insert_before(parent_id, closer_node, emphasis_id)
 
-          if opener[:count] == strength
+          if opener.count == strength
             @provisional_nodes.delete(opener_node)
             @arena.detach(opener_node)
             stack.delete_at(opener_idx)
             closer_idx -= 1
           else
-            opener[:count] -= strength
+            opener.count -= strength
             str = @arena.str1(opener_node)
             @arena.replace_str1(opener_node, str[0...-strength])
             if @track_source
@@ -531,12 +547,12 @@ module Markdast
             end
           end
 
-          if closer[:count] == strength
+          if closer.count == strength
             @provisional_nodes.delete(closer_node)
             @arena.detach(closer_node)
             stack.delete_at(closer_idx)
           else
-            closer[:count] -= strength
+            closer.count -= strength
             str = @arena.str1(closer_node)
             @arena.replace_str1(closer_node, str[strength..])
             if @track_source
@@ -547,7 +563,7 @@ module Markdast
           end
         end
 
-        stack.each { |e| @provisional_nodes.delete(e[:node_id]) }
+        stack.each { |e| @provisional_nodes.delete(e.node_id) }
         stack.clear
       end
     end
