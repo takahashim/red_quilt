@@ -769,6 +769,16 @@ RSpec.describe "CommonMark compatibility" do
     { number: 145, section: "Fenced code blocks", markdown: "``` aa ```\nfoo\n", html: "<p><code>aa</code>\nfoo</p>\n" },
     { number: 338, section: "Code spans", markdown: "`foo\\`bar`\n", html: "<p><code>foo\\</code>bar`</p>\n" },
     { number: 347, section: "Code spans", markdown: "```foo``\n", html: "<p>```foo``</p>\n" },
+    { number: 279, section: "List items", markdown: "-   \n  foo\n", html: "<ul>\n<li>foo</li>\n</ul>\n" },
+    { number: 280, section: "List items", markdown: "-\n\n  foo\n", html: "<ul>\n<li></li>\n</ul>\n<p>foo</p>\n" },
+    { number: 281, section: "List items", markdown: "- foo\n-\n- bar\n", html: "<ul>\n<li>foo</li>\n<li></li>\n<li>bar</li>\n</ul>\n" },
+    { number: 282, section: "List items", markdown: "- foo\n-   \n- bar\n", html: "<ul>\n<li>foo</li>\n<li></li>\n<li>bar</li>\n</ul>\n" },
+    { number: 283, section: "List items", markdown: "1. foo\n2.\n3. bar\n", html: "<ol>\n<li>foo</li>\n<li></li>\n<li>bar</li>\n</ol>\n" },
+    { number: 284, section: "List items", markdown: "*\n", html: "<ul>\n<li></li>\n</ul>\n" },
+    { number: 294, section: "List items", markdown: "- foo\n  - bar\n    - baz\n      - boo\n", html: "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>baz\n<ul>\n<li>boo</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n" },
+    { number: 296, section: "List items", markdown: "10) foo\n    - bar\n", html: "<ol start=\"10\">\n<li>foo\n<ul>\n<li>bar</li>\n</ul>\n</li>\n</ol>\n" },
+    { number: 320, section: "Lists", markdown: "* a\n  > b\n  >\n* c\n", html: "<ul>\n<li>a\n<blockquote>\n<p>b</p>\n</blockquote>\n</li>\n<li>c</li>\n</ul>\n" },
+    { number: 323, section: "Lists", markdown: "- a\n  - b\n", html: "<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>\n</ul>\n" },
   ].freeze
 
   KNOWN_GAPS = [

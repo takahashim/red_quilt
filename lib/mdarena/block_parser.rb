@@ -131,7 +131,11 @@ module Mdarena
 
         item_lines, index = collect_list_item(lines, index, match)
         end_byte = item_lines.last.end_byte
-        loose ||= item_lines.any?(&:blank)
+        # Blank lines inside an item make the list loose, EXCEPT the
+        # very first line: an empty marker (e.g. `-` followed by EOL)
+        # is recorded as a blank ItemLine but is not a real intra-item
+        # blank separator.
+        loose ||= item_lines.drop(1).any?(&:blank)
         item_id = @arena.add_node(NodeType::LIST_ITEM,
                                   source_start: item_lines.first.start_byte,
                                   source_len: item_lines.last.end_byte - item_lines.first.start_byte)

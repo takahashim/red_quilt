@@ -137,15 +137,28 @@ module Mdarena
       def render_list_item(node_id)
         parent_id = @arena.raw_parent_id(node_id)
         tight = parent_id != -1 && @arena.type(parent_id) == NodeType::LIST && @arena.int3(parent_id) == 1
+
+        # Loose lists open <li> with a newline; tight lists don't.
         @out << "\n" unless tight
 
         child_id = @arena.raw_first_child_id(node_id)
+        wrote_anything = false
         until child_id == -1
-          if tight && @arena.type(child_id) == NodeType::PARAGRAPH
+          type = @arena.type(child_id)
+          if tight && type == NodeType::PARAGRAPH
+            # Paragraph in a tight list: drop the wrapping <p>, but
+            # separate consecutive top-level paragraphs and any
+            # subsequent block-level child with a newline.
+            @out << "\n" if wrote_anything
             render_children(child_id)
           else
+            # Non-paragraph block (or any child in a loose list).
+            # Tight list paragraphs were emitted without their tag, so
+            # follow them with a newline before the next block.
+            @out << "\n" if tight && wrote_anything
             render_node(child_id)
           end
+          wrote_anything = true
           child_id = @arena.raw_next_sibling_id(child_id)
         end
       end
