@@ -232,7 +232,7 @@ module Mdarena
         link_id = add_arena_node(
           NodeType::LINK,
           @tokens.start_byte(id), @tokens.end_byte(id),
-          str1: destination
+          str1: normalize_link_uri(destination)
         )
         @arena.append_child(@parent_id, link_id)
         @arena.append_child(link_id, @arena.add_node(NodeType::TEXT, str1: label))
@@ -550,12 +550,17 @@ module Mdarena
         result
       end
 
-      def decode_link_entities(raw)
-        raw.gsub(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/) do |m|
-          decoded = CGI.unescapeHTML(m)
-          decoded.tr("\u0000", "\uFFFD")
-        end
-      end
+def decode_link_entities(raw)
+  raw.gsub(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/) do |m|
+    if m.start_with?("&#")
+      decoded = CGI.unescapeHTML(m)
+      decoded.tr("\u0000", "\uFFFD")
+    else
+      encoded = HTML_ENTITIES[m[1..-2]]
+      encoded ? encoded.dup.force_encoding(Encoding::UTF_8) : m
+    end
+  end
+end
 
       def byte_at(pos)
         return nil if pos < 0 || pos >= @source.bytesize
@@ -580,7 +585,7 @@ module Mdarena
           (b >= 0x61 && b <= 0x66)
       end
 
-      URL_SAFE_EXTRA_BYTES = "-._~:/?#[]@!$&'()*+,;=".each_byte.to_a.freeze
+      URL_SAFE_EXTRA_BYTES = "-._~:/?#@!$&'()*+,;=".each_byte.to_a.freeze
 
       def url_safe_byte?(b)
         return true if b >= 0x30 && b <= 0x39
@@ -610,12 +615,20 @@ module Mdarena
             )
             return nil
           end
-          return { end_byte: after_byte, destination: ref[:destination], title: ref[:title] }
+          return {
+            end_byte: after_byte,
+            destination: normalize_link_uri(ref[:destination].to_s),
+            title: ref[:title]
+          }
         end
 
         ref = @references[normalize_reference_label(text_label)]
         return nil unless ref
-        { end_byte: start_byte, destination: ref[:destination], title: ref[:title] }
+        {
+          end_byte: start_byte,
+          destination: normalize_link_uri(ref[:destination].to_s),
+          title: ref[:title]
+        }
       end
 
       def read_reference_label(start_byte)
@@ -674,7 +687,11 @@ module Mdarena
           if s >= byte_offset
             return id
           elsif e > byte_offset
-            append_text(byte_offset, e, nil) if @tokens.kind(id) == TokenKind::TEXT
+            # A multi-byte token (HTML inline, autolink, ...) overlaps
+            # the boundary of an earlier-resolved code span / link. The
+            # part inside the resolved span is already consumed; surface
+            # the tail bytes as plain text so they aren't silently lost.
+            append_text(byte_offset, e, nil)
             return id + 1
           end
           id += 1

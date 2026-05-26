@@ -2,7 +2,7 @@
 
 module Mdarena
   class BlockParser
-    Line = Struct.new(:content, :start_byte, :end_byte, :blank, keyword_init: true)
+    Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy, keyword_init: true)
     ItemLine = Struct.new(:content, :start_byte, :end_byte, :blank, :continuation, keyword_init: true)
 
     def initialize(arena)
@@ -80,8 +80,14 @@ module Mdarena
           # Lazy continuation: a `>`-less line is absorbed into the
           # currently open paragraph as long as it doesn't itself start
           # a new block. Only allowed while the most recent in-quote
-          # line is paragraph-eligible content.
-          block_lines << line
+          # line is paragraph-eligible content. The `lazy` flag prevents
+          # the paragraph parser from interpreting `===` / `---` on such
+          # a line as a setext underline.
+          block_lines << Line.new(content: line.content,
+                                  start_byte: line.start_byte,
+                                  end_byte: line.end_byte,
+                                  blank: line.blank,
+                                  lazy: true)
         else
           break
         end
@@ -125,6 +131,9 @@ module Mdarena
       loose = false
 
       while index < lines.length
+        # Thematic break beats list-item continuation per CommonMark:
+        # a line like `* * *` ends the list and starts an <hr />.
+        break if thematic_break?(lines[index].content)
         match = list_item_start(lines[index].content)
         break unless match
         break unless same_list_group?(first_match, match)
@@ -463,7 +472,7 @@ module Mdarena
         # paragraph_interrupt? so that "---" / "===" turns the open
         # paragraph into a heading instead of being treated as a
         # thematic break.
-        if paragraph_lines.any? && (level = setext_underline_level(line.content))
+        if paragraph_lines.any? && !line.lazy && (level = setext_underline_level(line.content))
           setext_level = level
           index += 1
           break
@@ -752,11 +761,25 @@ module Mdarena
       # Type 5: <![CDATA[
       return 5 if stripped.start_with?("<![CDATA[")
 
-      # Type 6 & 7: Valid HTML tags
+      # Type 6: line opens with one of the listed block-level tags.
+      return 6 if stripped.match?(HTML_BLOCK_TYPE_6_RE)
+
+      # Type 7: a complete open or closing tag spanning the line.
       return 7 if valid_html_tag?(stripped)
 
       nil
     end
+
+    HTML_BLOCK_TYPE_6_NAMES = %w[
+      address article aside base basefont blockquote body caption center
+      col colgroup dd details dialog dir div dl dt fieldset figcaption
+      figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header
+      hr html iframe legend li link main menu menuitem nav noframes ol
+      optgroup option p param search section summary table tbody td
+      tfoot th thead title tr track ul
+    ].freeze
+    HTML_BLOCK_TYPE_6_RE =
+      %r{\A</?(?:#{HTML_BLOCK_TYPE_6_NAMES.join("|")})(?:\s|>|/>|\z)}i.freeze
 
     def table_start?(lines, index)
       return false if index + 1 >= lines.length
@@ -780,8 +803,11 @@ module Mdarena
     end
 
     def valid_html_tag?(text)
-      text.match?(%r{\A</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>\z}) ||
-        text.match?(%r{\A<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*>.*</[A-Za-z][A-Za-z0-9-]*>\z})
+      # Type 7: a complete open or closing tag on its own line.
+      # Closing tags must not have attributes.
+      open_tag = %r{<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}
+      closing_tag = %r{</[A-Za-z][A-Za-z0-9-]*\s*>}
+      text.match?(/\A(?:#{open_tag}|#{closing_tag})\z/)
     end
 
     def link_reference_definition(lines, index)
@@ -926,7 +952,16 @@ module Mdarena
     end
 
     def unescape_reference_text(text)
-      text.gsub(/\\([!-\/:-@\[-`{-~])/, "\\1")
+      out = text.gsub(/\\([!-\/:-@\[-`{-~])/, "\\1")
+      out.gsub(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/) do |m|
+        if m.start_with?("&#")
+          decoded = CGI.unescapeHTML(m)
+          decoded.tr("\u0000", "\uFFFD")
+        else
+          encoded = Inline::HTML_ENTITIES[m[1..-2]]
+          encoded ? encoded.dup.force_encoding(Encoding::UTF_8) : m
+        end
+      end
     end
 
     def store_reference(reference)

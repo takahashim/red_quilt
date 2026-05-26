@@ -2,6 +2,8 @@
 
 require "cgi"
 
+require_relative "html_entities"
+
 module Mdarena
   module Inline
     # Scans a byte range of the document source and emits inline tokens
@@ -26,7 +28,17 @@ module Mdarena
       # @pos and not extend past @end.
       URI_AUTOLINK_RE = /\G<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
       EMAIL_AUTOLINK_RE = /\G<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
-      HTML_TAG_RE = %r{\G</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
+      # CommonMark spec 6.6 "Raw HTML": six forms — open tag, closing tag,
+      # HTML comment, processing instruction, declaration, CDATA section.
+      # Attribute values are allowed to span lines.
+      HTML_OPEN_TAG_RE = %r{\G<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
+      HTML_CLOSING_TAG_RE = %r{\G</[A-Za-z][A-Za-z0-9-]*\s*>}.freeze
+      # Comment: `<!-->`, `<!--->`, or `<!-- text -->` where text doesn't
+      # start with `>` or `->`, end with `-`, or contain `--`.
+      HTML_COMMENT_RE = %r{\G<!-->|\G<!--->|\G<!--(?![>])(?!->)[\s\S]*?(?<!-)-->}.freeze
+      HTML_PROC_INST_RE = %r{\G<\?[\s\S]*?\?>}.freeze
+      HTML_DECLARATION_RE = %r{\G<![A-Za-z][^>]*>}.freeze
+      HTML_CDATA_RE = %r{\G<!\[CDATA\[[\s\S]*?\]\]>}.freeze
       ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/.freeze
 
       def initialize(source)
@@ -193,7 +205,12 @@ module Mdarena
           tokens.emit(TokenKind::AUTOLINK_EMAIL,
                       start_byte: start, end_byte: @pos,
                       str1: m[1])
-        elsif (m = match_at(HTML_TAG_RE))
+        elsif (m = match_at(HTML_OPEN_TAG_RE)) ||
+              (m = match_at(HTML_CLOSING_TAG_RE)) ||
+              (m = match_at(HTML_COMMENT_RE)) ||
+              (m = match_at(HTML_PROC_INST_RE)) ||
+              (m = match_at(HTML_DECLARATION_RE)) ||
+              (m = match_at(HTML_CDATA_RE))
           @pos = m.end(0)
           tokens.emit(TokenKind::HTML_INLINE,
                       start_byte: start, end_byte: @pos,
@@ -221,10 +238,15 @@ module Mdarena
       # XML-5 set, this layer handles:
       # - U+0000: replaced with U+FFFD per CommonMark spec
       # - leaves unknown named entities as the raw `&name;` text
-      def decode_entity(raw)
-        decoded = CGI.unescapeHTML(raw)
-        decoded.tr("\u0000", "\uFFFD")
-      end
+def decode_entity(raw)
+  if raw.start_with?("&#")
+    decoded = CGI.unescapeHTML(raw)
+    return decoded.tr("\u0000", "\uFFFD")
+  end
+  encoded = HTML_ENTITIES[raw[1..-2]]
+  return raw unless encoded
+  encoded.dup.force_encoding(Encoding::UTF_8)
+end
 
       # Returns a MatchData for a \G-anchored regex applied at @pos, or nil
       # if no match or if the match would extend past @end.

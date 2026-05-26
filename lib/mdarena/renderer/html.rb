@@ -138,10 +138,17 @@ module Mdarena
         parent_id = @arena.raw_parent_id(node_id)
         tight = parent_id != -1 && @arena.type(parent_id) == NodeType::LIST && @arena.int3(parent_id) == 1
 
-        # Loose lists open <li> with a newline; tight lists don't.
-        @out << "\n" unless tight
+        first_child_id = @arena.raw_first_child_id(node_id)
+        first_is_para = first_child_id != -1 &&
+                        @arena.type(first_child_id) == NodeType::PARAGRAPH
 
-        child_id = @arena.raw_first_child_id(node_id)
+        # Empty <li> renders inline; otherwise loose lists and tight
+        # items opening with a non-paragraph block get a leading newline.
+        if first_child_id != -1 && (!tight || !first_is_para)
+          @out << "\n"
+        end
+
+        child_id = first_child_id
         wrote_anything = false
         until child_id == -1
           type = @arena.type(child_id)
