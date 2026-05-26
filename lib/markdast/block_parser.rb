@@ -232,69 +232,55 @@ module Markdast
       index
     end
 
+    HTML_BLOCK_FIXED_TERMINATORS = {
+      2 => "-->",
+      3 => "?>",
+      4 => ">",
+      5 => "]]>"
+    }.freeze
+
     def parse_html_block(parent_id, lines, index, transformed)
       start_index = index
-      html_lines = []
       type = html_block_type(lines[index].content)
-
-      case type
-      when 1
-        # Type 1: script|pre|style|textarea, terminated by closing tag
-        closing_tag = extract_closing_tag_name(lines[index].content)
-        while index < lines.length
-          html_lines << lines[index].content
-          break if lines[index].content.downcase.include?("</#{closing_tag}>")
-          index += 1
-        end
-        index += 1 if index < lines.length
-      when 2
-        # Type 2: comment, terminated by -->
-        while index < lines.length
-          html_lines << lines[index].content
-          break if lines[index].content.include?("-->")
-          index += 1
-        end
-        index += 1 if index < lines.length
-      when 3
-        # Type 3: processing instruction, terminated by ?>
-        while index < lines.length
-          html_lines << lines[index].content
-          break if lines[index].content.include?("?>")
-          index += 1
-        end
-        index += 1 if index < lines.length
-      when 4
-        # Type 4: declaration, terminated by >
-        while index < lines.length
-          html_lines << lines[index].content
-          break if lines[index].content.include?(">")
-          index += 1
-        end
-        index += 1 if index < lines.length
-      when 5
-        # Type 5: CDATA, terminated by ]]>
-        while index < lines.length
-          html_lines << lines[index].content
-          break if lines[index].content.include?("]]>")
-          index += 1
-        end
-        index += 1 if index < lines.length
-      else
-        # Types 6 & 7: continue until blank line
-        while index < lines.length && !lines[index].blank
-          html_lines << lines[index].content
-          index += 1
-        end
-      end
+      end_index = locate_html_block_end(lines, index, type)
 
       start_byte = lines[start_index].start_byte
-      end_byte = lines[start_index + html_lines.length - 1].end_byte
+      end_byte = lines[end_index].end_byte
+      html_lines = (start_index..end_index).map { |i| lines[i].content }
       html_id = @arena.add_node(NodeType::HTML_BLOCK,
                                 source_start: start_byte,
                                 source_len: end_byte - start_byte,
                                 str1: html_lines.join("\n"))
       @arena.append_child(parent_id, html_id)
-      index
+      end_index + 1
+    end
+
+    def locate_html_block_end(lines, index, type)
+      terminator = html_block_terminator(type, lines[index].content)
+
+      if terminator
+        case_insensitive = (type == 1)
+        while index < lines.length
+          line = lines[index].content
+          haystack = case_insensitive ? line.downcase : line
+          return index if haystack.include?(terminator)
+          index += 1
+        end
+        lines.length - 1
+      else
+        # Types 6 & 7: terminated by blank line (or end of input)
+        index += 1 while index < lines.length && !lines[index].blank
+        index - 1
+      end
+    end
+
+    def html_block_terminator(type, first_line)
+      case type
+      when 1
+        "</#{extract_closing_tag_name(first_line)}>"
+      when 2..5
+        HTML_BLOCK_FIXED_TERMINATORS[type]
+      end
     end
 
     def extract_closing_tag_name(text)
