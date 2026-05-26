@@ -694,7 +694,9 @@ RSpec.describe "CommonMark compatibility" do
       number: 182,
       section: "Link reference definitions",
       markdown: "[foo]: <bar>(baz)\n\n[foo]\n",
-      html: "<p><a href=\"bar(baz)\">foo</a></p>\n"
+      html: "<p><a href=\"bar(baz)\">foo</a></p>\n",
+      reason: "angle-bracketed destination + trailing chars: cmark strips inner brackets, " \
+              "but we don't yet model that"
     }
   ].freeze
 

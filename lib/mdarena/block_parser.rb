@@ -598,9 +598,18 @@ module Mdarena
 
       if source.start_with?("<")
         close = source.index(">")
-        return [nil, nil] unless close
-
-        return [source[0..close], source[(close + 1)..].to_s]
+        if close
+          tail = source[(close + 1)..].to_s
+          # CommonMark: when the closing `>` is followed by whitespace or
+          # EOL, this is a clean angle-bracketed destination. Otherwise
+          # (e.g. `<bar>(baz)`) the spec wants the whole token to fall
+          # through to a raw-destination interpretation that also strips
+          # any internal angle brackets — currently unsupported, see
+          # KNOWN_GAPS #182.
+          if tail.empty? || tail.match?(/\A[ \t\r\n]/)
+            return [source[0..close], tail]
+          end
+        end
       end
 
       match = /\A(\S+)(.*)\z/m.match(source)
