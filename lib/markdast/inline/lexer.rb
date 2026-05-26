@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "cgi"
+
 module Markdast
   module Inline
     # Scans a byte range of the document source and emits inline tokens
@@ -14,9 +16,13 @@ module Markdast
       # token.
       SPECIAL_RE = /[*_`\[\]!<&\\\n]/.freeze
 
-      # ASCII punctuation that is allowed to follow a backslash as an
-      # escaped character per CommonMark.
-      ASCII_PUNCT_RE = /[!-\/:-@\[-`{-~]/.freeze
+      # \G-anchored regexes reused from the legacy InlineParser. Each is
+      # invoked with String#match(re, @pos), so the match must begin at
+      # @pos and not extend past @end.
+      URI_AUTOLINK_RE = /\G<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
+      EMAIL_AUTOLINK_RE = /\G<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
+      HTML_TAG_RE = %r{\G</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
+      ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/.freeze
 
       def initialize(source)
         @source = source
@@ -48,9 +54,17 @@ module Markdast
             scan_delim_run(tokens, "*", 0x2A)
           when 0x5F # _
             scan_delim_run(tokens, "_", 0x5F)
+          when 0x5B # [
+            scan_one_byte_token(tokens, TokenKind::LBRACKET)
+          when 0x5D # ]
+            scan_one_byte_token(tokens, TokenKind::RBRACKET)
+          when 0x21 # !
+            scan_bang(tokens)
+          when 0x3C # <
+            scan_angle(tokens)
+          when 0x26 # &
+            scan_amp(tokens)
           else
-            # TODO(commit 4): handle remaining special bytes ([, ], !, <, &).
-            # For now, treat any non-handled byte as text.
             scan_text(tokens)
           end
         end
@@ -59,9 +73,8 @@ module Markdast
       def scan_text(tokens)
         start = @pos
         # Search from @pos + 1 so we always make forward progress, even if
-        # the current byte is itself "special" (handlers for *, _, etc. are
-        # added by commits 3 and 4; until then they fall through to this
-        # method and need to be consumed as plain text).
+        # the current byte is itself "special" but for some reason fell
+        # through to scan_text (e.g. a `&` that didn't match ENTITY_RE).
         nxt = @source.index(SPECIAL_RE, @pos + 1)
         @pos = nxt && nxt < @end ? nxt : @end
         @pos = start + 1 if @pos == start && @pos < @end
@@ -88,7 +101,6 @@ module Markdast
         start = @pos
         nxt_pos = start + 1
         if nxt_pos >= @end
-          # Trailing backslash at end of range — treat as plain text.
           tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: nxt_pos)
           @pos = nxt_pos
           return
@@ -96,22 +108,17 @@ module Markdast
 
         nxt = @source.getbyte(nxt_pos)
         if nxt == 0x0A
-          # "\\\n" → hardbreak. Emit a LINE_ENDING that carries the
-          # hardbreak intent via int2 = 1 (backslash form).
+          # "\\\n" → hardbreak (backslash form). int2 = 1 signals the form.
           @pos = nxt_pos + 1
           tokens.emit(TokenKind::LINE_ENDING,
                       start_byte: start, end_byte: @pos,
                       int1: 0, int2: 1)
         elsif ascii_punct?(nxt)
-          # "\X" where X is ASCII punct → ESCAPED_CHAR; str1 holds the
-          # decoded character (1 byte, ASCII).
           @pos = nxt_pos + 1
           tokens.emit(TokenKind::ESCAPED_CHAR,
                       start_byte: start, end_byte: @pos,
                       str1: nxt.chr)
         else
-          # "\X" where X is not punct → treat the backslash as literal text;
-          # the following byte will be picked up on the next iteration.
           tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: nxt_pos)
           @pos = nxt_pos
         end
@@ -136,6 +143,68 @@ module Markdast
         tokens.emit(TokenKind::DELIM_RUN,
                     start_byte: start, end_byte: @pos,
                     int1: byte, int2: count, int3: flags)
+      end
+
+      def scan_one_byte_token(tokens, kind)
+        start = @pos
+        @pos += 1
+        tokens.emit(kind, start_byte: start, end_byte: @pos)
+      end
+
+      def scan_bang(tokens)
+        start = @pos
+        if @pos + 1 < @end && @source.getbyte(@pos + 1) == 0x5B # [
+          @pos += 2
+          tokens.emit(TokenKind::BANG_LBRACKET, start_byte: start, end_byte: @pos)
+        else
+          @pos += 1
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+        end
+      end
+
+      def scan_angle(tokens)
+        start = @pos
+        if (m = match_at(URI_AUTOLINK_RE))
+          @pos = m.end(0)
+          tokens.emit(TokenKind::AUTOLINK_URI,
+                      start_byte: start, end_byte: @pos,
+                      str1: m[1])
+        elsif (m = match_at(EMAIL_AUTOLINK_RE))
+          @pos = m.end(0)
+          tokens.emit(TokenKind::AUTOLINK_EMAIL,
+                      start_byte: start, end_byte: @pos,
+                      str1: m[1])
+        elsif (m = match_at(HTML_TAG_RE))
+          @pos = m.end(0)
+          tokens.emit(TokenKind::HTML_INLINE,
+                      start_byte: start, end_byte: @pos,
+                      str1: m[0])
+        else
+          @pos += 1
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+        end
+      end
+
+      def scan_amp(tokens)
+        start = @pos
+        if (m = match_at(ENTITY_RE))
+          @pos = m.end(0)
+          tokens.emit(TokenKind::ENTITY,
+                      start_byte: start, end_byte: @pos,
+                      str1: CGI.unescapeHTML(m[0]))
+        else
+          @pos += 1
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+        end
+      end
+
+      # Returns a MatchData for a \G-anchored regex applied at @pos, or nil
+      # if no match or if the match would extend past @end.
+      def match_at(regex)
+        m = regex.match(@source, @pos)
+        return nil unless m
+        return nil if m.end(0) > @end
+        m
       end
 
       def ascii_punct?(byte)

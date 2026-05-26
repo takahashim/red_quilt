@@ -157,4 +157,79 @@ RSpec.describe Markdast::Inline::Lexer do
       expect(result.int3(dr) & 0b10).to eq(0b10)
     end
   end
+
+  describe "brackets" do
+    it "emits LBRACKET / RBRACKET as single-byte tokens" do
+      result = lex("[a]")
+      kinds = result.each_id.map { |id| Markdast::Inline::TokenKind.name(result.kind(id)) }
+      expect(kinds).to eq([:lbracket, :text, :rbracket])
+    end
+
+    it "emits BANG_LBRACKET as a 2-byte token for '!['" do
+      result = lex("![alt]")
+      first = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(first))).to eq(:bang_lbracket)
+      expect([result.start_byte(first), result.end_byte(first)]).to eq([0, 2])
+    end
+
+    it "emits a lone '!' (not followed by '[') as TEXT" do
+      result = lex("!a")
+      first = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(first))).to eq(:text)
+      expect([result.start_byte(first), result.end_byte(first)]).to eq([0, 1])
+    end
+  end
+
+  describe "AUTOLINK" do
+    it "emits AUTOLINK_URI for <https://example.com>" do
+      result = lex("<https://example.com>")
+      id = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:autolink_uri)
+      expect(result.str1(id)).to eq("https://example.com")
+    end
+
+    it "emits AUTOLINK_EMAIL for <a@b.example>" do
+      result = lex("<a@b.example>")
+      id = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:autolink_email)
+      expect(result.str1(id)).to eq("a@b.example")
+    end
+  end
+
+  describe "HTML_INLINE" do
+    it "emits HTML_INLINE for a recognized tag" do
+      result = lex("<span>")
+      id = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:html_inline)
+      expect(result.str1(id)).to eq("<span>")
+    end
+
+    it "emits TEXT for an unrecognized '<' followed by non-tag input" do
+      result = lex("<>")
+      id = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:text)
+    end
+  end
+
+  describe "ENTITY" do
+    it "emits ENTITY for a named entity and decodes via str1" do
+      result = lex("&amp;")
+      id = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:entity)
+      expect(result.str1(id)).to eq("&")
+    end
+
+    it "emits ENTITY for a numeric entity" do
+      result = lex("&#65;")
+      id = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:entity)
+      expect(result.str1(id)).to eq("A")
+    end
+
+    it "emits TEXT for an unrecognized '&'" do
+      result = lex("&notanentity")
+      id = 0
+      expect(Markdast::Inline::TokenKind.name(result.kind(id))).to eq(:text)
+    end
+  end
 end
