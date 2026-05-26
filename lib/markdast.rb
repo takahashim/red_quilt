@@ -3,6 +3,7 @@
 require_relative "markdast/version"
 require_relative "markdast/node_type"
 require_relative "markdast/source_span"
+require_relative "markdast/source_map"
 require_relative "markdast/arena"
 require_relative "markdast/node_ref"
 require_relative "markdast/document"

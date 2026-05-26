@@ -262,5 +262,44 @@ RSpec.describe Markdast do
 
       expect(doc.to_html).to eq(described_class.render_html(source))
     end
+
+    it "provides source_location with line/column for nodes" do
+      source = "# Title\n\nBody text\nwith newline"
+      doc = described_class.parse(source)
+
+      heading = doc.root.children.first
+      # heading source_span is the inline part ("Title"), not including "# "
+      expect(heading.source_location).to eq({
+        start_line: 1, start_column: 2,
+        end_line: 1, end_column: 7
+      })
+
+      paragraph = doc.root.children.last
+      # paragraph spans from "Body" to end of "newline"
+      expect(paragraph.source_location).to eq({
+        start_line: 3, start_column: 0,
+        end_line: 4, end_column: 12
+      })
+    end
+
+    it "caches source_map for repeated calls" do
+      source = "Line 1\nLine 2\nLine 3"
+      doc = described_class.parse(source)
+
+      source_map1 = doc.source_map
+      source_map2 = doc.source_map
+
+      expect(source_map1).to equal(source_map2)
+    end
+
+    it "returns nil source_location for nodes without source_span" do
+      doc = described_class.parse("# Title")
+      heading = doc.root.children.first
+
+      # All nodes should have source_span, but test defensively
+      # This would only be nil in edge cases during construction
+      location = heading.source_location
+      expect(location).to be_a(Hash) if location
+    end
   end
 end

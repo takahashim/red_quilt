@@ -31,5 +31,9 @@ module Markdast
     def to_ast
       root.to_h
     end
+
+    def source_map
+      @source_map ||= SourceMap.new(@source)
+    end
   end
 end

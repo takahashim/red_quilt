@@ -1,0 +1,27 @@
+# frozen_string_literal: true
+
+module Markdast
+  class SourceMap
+    def initialize(source)
+      @source = source
+      @line_starts = build_line_starts(source)
+    end
+
+    def line_column(byte_offset)
+      line = (@line_starts.bsearch_index { |s| s > byte_offset } || @line_starts.length) - 1
+      { line: line + 1, column: byte_offset - @line_starts[line] }
+    end
+
+    private
+
+    def build_line_starts(source)
+      starts = [0]
+      pos = 0
+      while (idx = source.index("\n", pos))
+        starts << idx + 1
+        pos = idx + 1
+      end
+      starts
+    end
+  end
+end

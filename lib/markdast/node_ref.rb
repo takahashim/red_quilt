@@ -54,6 +54,21 @@ module Markdast
       walk.select { |node| node.type == type }
     end
 
+    def source_location
+      span = source_span
+      return nil unless span
+
+      start_loc = @document.source_map.line_column(span.start_byte)
+      end_loc = @document.source_map.line_column(span.end_byte)
+
+      {
+        start_line: start_loc[:line],
+        start_column: start_loc[:column],
+        end_line: end_loc[:line],
+        end_column: end_loc[:column]
+      }
+    end
+
     def to_h
       ast = {
         type: type,

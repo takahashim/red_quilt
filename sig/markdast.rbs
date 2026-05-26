@@ -13,6 +13,7 @@ module Markdast
     def to_html: () -> String
     def to_ast: () -> Hash[Symbol, untyped]
     def allow_html?: () -> bool
+    def source_map: () -> SourceMap
   end
 
   class NodeRef
@@ -29,9 +30,15 @@ module Markdast
     def to_h: () -> Hash[Symbol, untyped]
     def text: () -> String?
     def source_span: () -> SourceSpan?
+    def source_location: () -> { start_line: Integer, start_column: Integer, end_line: Integer, end_column: Integer }?
   end
 
   class Arena
+  end
+
+  class SourceMap
+    def initialize: (String source) -> void
+    def line_column: (Integer byte_offset) -> { line: Integer, column: Integer }
   end
 
   SourceSpan = Data[Integer, Integer]
