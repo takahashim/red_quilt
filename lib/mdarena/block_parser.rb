@@ -754,7 +754,27 @@ module Mdarena
     end
 
     def fenced_code_close?(text, char, count)
-      text.match?(/\A {0,3}#{Regexp.escape(char * count)}#{Regexp.escape(char)}*[ \t]*\z/)
+      # Manual byte scan beats compiling a per-(char,count) regex on
+      # every line of a fenced block. Pattern: 0-3 spaces, >=count of
+      # `char`, optional trailing spaces/tabs, end-of-line.
+      bytes = text.bytesize
+      i = 0
+      # CommonMark spec: at most 3 spaces of indent.
+      while i < 3 && i < bytes && text.getbyte(i) == 0x20
+        i += 1
+      end
+      char_byte = char.getbyte(0)
+      fence_start = i
+      while i < bytes && text.getbyte(i) == char_byte
+        i += 1
+      end
+      return false if i - fence_start < count
+      while i < bytes
+        b = text.getbyte(i)
+        return false unless b == 0x20 || b == 0x09
+        i += 1
+      end
+      true
     end
 
     def indented_code_line?(text)
@@ -768,8 +788,17 @@ module Mdarena
     end
 
     def html_block_type(text)
-      stripped = text.lstrip
-      return nil if stripped.empty?
+      # Fast reject: every HTML block starts with `<`. lstrip strips
+      # 0-3 indent spaces (more would already be indented code), so peek
+      # the leading non-space byte before doing any allocations.
+      i = 0
+      # CommonMark: HTML block lines may have 0-3 spaces of indent.
+      while i < 3 && i < text.length && text.getbyte(i) == 0x20
+        i += 1
+      end
+      return nil unless i < text.length && text.getbyte(i) == 0x3C
+
+      stripped = i.zero? ? text : text[i..]
 
       # Type 1: <script|pre|style|textarea (case-insensitive) followed by whitespace or >
       return 1 if stripped.match?(%r{\A<(script|pre|style|textarea)(?:\s|>|$)}i)
@@ -827,12 +856,21 @@ module Mdarena
       body.split("|", -1)
     end
 
+    # Type 7: a complete open or closing tag on its own line.
+    # Closing tags must not have attributes.
+    HTML_TYPE_7_OPEN_TAG_RE = %r{
+      \A
+      <[A-Za-z][A-Za-z0-9-]*
+      (?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*
+      \s*/?>
+      \z
+    }x.freeze
+    HTML_TYPE_7_CLOSING_TAG_RE = %r{\A</[A-Za-z][A-Za-z0-9-]*\s*>\z}.freeze
+
     def valid_html_tag?(text)
-      # Type 7: a complete open or closing tag on its own line.
-      # Closing tags must not have attributes.
-      open_tag = %r{<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*\s*/?>}
-      closing_tag = %r{</[A-Za-z][A-Za-z0-9-]*\s*>}
-      text.match?(/\A(?:#{open_tag}|#{closing_tag})\z/)
+      # Fast reject: every type-7 tag must begin with `<`.
+      return false unless text.start_with?("<")
+      HTML_TYPE_7_OPEN_TAG_RE.match?(text) || HTML_TYPE_7_CLOSING_TAG_RE.match?(text)
     end
 
     def link_reference_definition(lines, index)
