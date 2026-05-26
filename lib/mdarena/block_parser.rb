@@ -140,11 +140,10 @@ module Mdarena
 
         item_lines, index = collect_list_item(lines, index, match)
         end_byte = item_lines.last.end_byte
-        # Blank lines inside an item make the list loose, EXCEPT the
-        # very first line: an empty marker (e.g. `-` followed by EOL)
-        # is recorded as a blank ItemLine but is not a real intra-item
-        # blank separator.
-        loose ||= item_lines.drop(1).any?(&:blank)
+        # Blank lines inside an item make the list loose, EXCEPT:
+        # - the very first line (empty marker, e.g. `-` alone)
+        # - blanks inside a fenced code block (they belong to the code)
+        loose ||= item_blank_makes_loose?(item_lines)
         item_id = @arena.add_node(NodeType::LIST_ITEM,
                                   source_start: item_lines.first.start_byte,
                                   source_len: item_lines.last.end_byte - item_lines.first.start_byte)
@@ -287,6 +286,25 @@ module Mdarena
 
     def same_list_group?(expected, actual)
       expected[:ordered] == actual[:ordered] && expected[:marker] == actual[:marker]
+    end
+
+    def item_blank_makes_loose?(item_lines)
+      in_fence = false
+      fence_char = nil
+      fence_count = 0
+      item_lines.each_with_index do |line, idx|
+        content = line.content
+        if !in_fence && (fence = fenced_code_start(content))
+          in_fence = true
+          fence_char = fence[:char]
+          fence_count = fence[:count]
+        elsif in_fence && fenced_code_close?(content, fence_char, fence_count)
+          in_fence = false
+        elsif line.blank && !in_fence && idx > 0
+          return true
+        end
+      end
+      false
     end
 
     def parse_fenced_code(parent_id, lines, index, fence, transformed)

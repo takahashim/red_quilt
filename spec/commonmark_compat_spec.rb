@@ -854,6 +854,8 @@ RSpec.describe "CommonMark compatibility" do
     { number: 194, section: "Link reference definitions", markdown: "[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]\n", html: "<p><a href=\"my_(url)\" title=\"title (with parens)\">Foo*bar]</a></p>\n" },
     { number: 201, section: "Link reference definitions", markdown: "[foo]: <bar>(baz)\n\n[foo]\n", html: "<p>[foo]: <bar>(baz)</p>\n<p>[foo]</p>\n" },
     { number: 187, section: "HTML blocks", markdown: "Foo\n<a href=\"bar\">\nbaz\n", html: "<p>Foo\n<a href=\"bar\">\nbaz</p>\n" },
+    { number: 321, section: "Lists", markdown: "- a\n  > b\n  ```\n  c\n  ```\n- d\n", html: "<ul>\n<li>a\n<blockquote>\n<p>b</p>\n</blockquote>\n<pre><code>c\n</code></pre>\n</li>\n<li>d</li>\n</ul>\n" },
+    { number: 318, section: "Lists", markdown: "- a\n- ```\n  b\n\n\n  ```\n- c\n", html: "<ul>\n<li>a</li>\n<li>\n<pre><code>b\n\n\n</code></pre>\n</li>\n<li>c</li>\n</ul>\n" },
   ].freeze
 
   KNOWN_GAPS = [].freeze

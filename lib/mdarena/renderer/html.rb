@@ -149,23 +149,23 @@ module Mdarena
         end
 
         child_id = first_child_id
-        wrote_anything = false
+        prev_type = nil
         until child_id == -1
           type = @arena.type(child_id)
           if tight && type == NodeType::PARAGRAPH
             # Paragraph in a tight list: drop the wrapping <p>, but
-            # separate consecutive top-level paragraphs and any
-            # subsequent block-level child with a newline.
-            @out << "\n" if wrote_anything
+            # separate consecutive top-level paragraphs with a newline.
+            @out << "\n" if prev_type
             render_children(child_id)
           else
-            # Non-paragraph block (or any child in a loose list).
-            # Tight list paragraphs were emitted without their tag, so
-            # follow them with a newline before the next block.
-            @out << "\n" if tight && wrote_anything
+            # Non-paragraph block. Tight list paragraphs were emitted
+            # without their tag, so follow them with `\n` to land the
+            # next block on a fresh line. Other blocks already end with
+            # their own `\n`, so no extra separator is needed.
+            @out << "\n" if tight && prev_type == NodeType::PARAGRAPH
             render_node(child_id)
           end
-          wrote_anything = true
+          prev_type = type
           child_id = @arena.raw_next_sibling_id(child_id)
         end
       end
