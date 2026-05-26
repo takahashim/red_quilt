@@ -12,32 +12,58 @@ module Markdast
     #   2. process_emphasis — CommonMark spec 6.2 algorithm pairs up
     #      delimiter stack entries into EMPHASIS / STRONG nodes.
     class Builder
-      def initialize(arena, source, references)
+      SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
+
+      # track_source: when true, arena nodes carry the byte ranges supplied
+      # by the lexer. When false (used for inputs whose source has been
+      # materialized into a separate string, e.g. transformed blockquote
+      # lines), source_start/source_len are not recorded; in that mode every
+      # text node carries its content in str1 so Arena#text still works.
+      def initialize(arena, source, references, track_source: true)
         @arena = arena
         @source = source
         @references = references
+        @track_source = track_source
       end
-
-      SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
 
       def build(parent_id, tokens)
         @parent_id = parent_id
         @tokens = tokens
         @delimiter_stack = []
         @bracket_stack = []
-        @provisional_nodes = {} # node_id => true while still on a stack
+        @provisional_nodes = {}
         linear_pass
         process_emphasis(@delimiter_stack)
       end
 
       private
 
+      # --------------------------- node helpers ---------------------------
+
+      def add_arena_node(type, start_byte, end_byte, str1: nil, str2: nil)
+        if @track_source
+          @arena.add_node(type,
+                          source_start: start_byte,
+                          source_len: end_byte - start_byte,
+                          str1: str1, str2: str2)
+        else
+          @arena.add_node(type, source_start: -1, source_len: 0,
+                                str1: str1, str2: str2)
+        end
+      end
+
+      def update_arena_span(node_id, start_byte, end_byte)
+        return unless @track_source
+        @arena.update_span(node_id, start_byte, end_byte)
+      end
+
+      # --------------------------- linear pass ----------------------------
+
       def linear_pass
         id = 0
         last = @tokens.length
         while id < last
-          kind = @tokens.kind(id)
-          case kind
+          case @tokens.kind(id)
           when TokenKind::TEXT
             append_text(@tokens.start_byte(id), @tokens.end_byte(id), nil)
           when TokenKind::ENTITY, TokenKind::ESCAPED_CHAR
@@ -57,7 +83,6 @@ module Markdast
               id = next_id
               next
             end
-            # No matching closer: the backtick run is plain text.
             append_text(@tokens.start_byte(id), @tokens.end_byte(id), nil)
           when TokenKind::LBRACKET
             push_bracket(id, image: false)
@@ -71,21 +96,156 @@ module Markdast
             end
           when TokenKind::DELIM_RUN
             push_delim_run(id)
-          else
-            # No-op for unrecognized kinds.
           end
           id += 1
         end
       end
 
+      # ---------------------------- text ----------------------------------
+
+      def append_text(start_byte, end_byte, literal)
+        materialized = if literal
+                         literal
+                       elsif !@track_source
+                         @source.byteslice(start_byte, end_byte - start_byte).to_s
+                       end
+
+        last = @arena.last_child(@parent_id)
+        if last != -1 && @arena.type(last) == NodeType::TEXT &&
+           !@provisional_nodes[last] && can_coalesce?(last, start_byte)
+          coalesce_text(last, materialized, start_byte, end_byte)
+          return
+        end
+
+        node = add_arena_node(NodeType::TEXT, start_byte, end_byte, str1: materialized)
+        @arena.append_child(@parent_id, node)
+      end
+
+      def can_coalesce?(last_id, start_byte)
+        if @track_source
+          @arena.source_start(last_id) + @arena.source_len(last_id) == start_byte
+        else
+          !@arena.str1(last_id).nil?
+        end
+      end
+
+      def coalesce_text(last_id, materialized, start_byte, end_byte)
+        if @track_source
+          last_lit = @arena.str1(last_id)
+          if materialized.nil? && last_lit.nil?
+            update_arena_span(last_id, @arena.source_start(last_id), end_byte)
+            return
+          end
+          existing = last_lit || @arena.text(last_id).to_s
+          incoming = materialized || @source.byteslice(start_byte, end_byte - start_byte).to_s
+          @arena.replace_str1(last_id, existing + incoming)
+          update_arena_span(last_id, @arena.source_start(last_id), end_byte)
+        else
+          @arena.replace_str1(last_id, @arena.str1(last_id) + materialized.to_s)
+        end
+      end
+
+      # --------------------------- line endings ---------------------------
+
+      def append_line_ending(id)
+        start_byte = @tokens.start_byte(id)
+        end_byte = @tokens.end_byte(id)
+        trailing_spaces = @tokens.int1(id)
+        backslash_form = @tokens.int2(id) == 1
+
+        if trailing_spaces >= 2 || backslash_form
+          strip_trailing_spaces(trailing_spaces) if trailing_spaces.positive?
+          kind = NodeType::HARDBREAK
+        else
+          kind = NodeType::SOFTBREAK
+        end
+
+        @arena.append_child(@parent_id,
+          add_arena_node(kind, start_byte, end_byte, str1: "\n"))
+      end
+
+      def strip_trailing_spaces(count)
+        last = @arena.last_child(@parent_id)
+        return if last == -1 || @arena.type(last) != NodeType::TEXT
+
+        lit = @arena.str1(last)
+        if lit
+          new_lit = lit.sub(/ {#{count},}\z/, "")
+          @arena.replace_str1(last, new_lit)
+        end
+
+        return unless @track_source
+        new_len = @arena.source_len(last) - count
+        new_len = 0 if new_len.negative?
+        @arena.update_span(last,
+                           @arena.source_start(last),
+                           @arena.source_start(last) + new_len)
+      end
+
+      # --------------------------- HTML / autolink ------------------------
+
+      def append_html_inline(id)
+        node = add_arena_node(
+          NodeType::HTML_INLINE,
+          @tokens.start_byte(id), @tokens.end_byte(id),
+          str1: @tokens.str1(id)
+        )
+        @arena.append_child(@parent_id, node)
+      end
+
+      def append_autolink(id, destination, label)
+        link_id = add_arena_node(
+          NodeType::LINK,
+          @tokens.start_byte(id), @tokens.end_byte(id),
+          str1: destination
+        )
+        @arena.append_child(@parent_id, link_id)
+        @arena.append_child(link_id, @arena.add_node(NodeType::TEXT, str1: label))
+      end
+
+      # --------------------------- code spans -----------------------------
+
+      def resolve_code_span(opener_id)
+        run_len = @tokens.int1(opener_id)
+        search_id = opener_id + 1
+        total = @tokens.length
+        while search_id < total
+          if @tokens.kind(search_id) == TokenKind::CODE_DELIMITER &&
+             @tokens.int1(search_id) == run_len
+            emit_code_span(opener_id, search_id)
+            return search_id + 1
+          end
+          search_id += 1
+        end
+        nil
+      end
+
+      def emit_code_span(opener_id, closer_id)
+        body_start = @tokens.end_byte(opener_id)
+        body_end = @tokens.start_byte(closer_id)
+        span_start = @tokens.start_byte(opener_id)
+        span_end = @tokens.end_byte(closer_id)
+        raw = @source.byteslice(body_start, body_end - body_start).to_s
+        node = add_arena_node(NodeType::CODE_SPAN, span_start, span_end,
+                              str1: normalize_code_span(raw))
+        @arena.append_child(@parent_id, node)
+      end
+
+      def normalize_code_span(text)
+        text = text.tr("\n", " ")
+        if text.length >= 2 && text.start_with?(" ") && text.end_with?(" ") && text.match?(/[^ ]/)
+          text = text[1..-2]
+        end
+        text
+      end
+
+      # --------------------------- brackets -------------------------------
+
       def push_bracket(token_id, image:)
-        start_byte = @tokens.start_byte(token_id)
-        end_byte = @tokens.end_byte(token_id)
         text = image ? "![" : "["
-        node_id = @arena.add_node(
+        node_id = add_arena_node(
           NodeType::TEXT,
-          source_start: start_byte,
-          source_len: end_byte - start_byte,
+          @tokens.start_byte(token_id), @tokens.end_byte(token_id),
           str1: text
         )
         @arena.append_child(@parent_id, node_id)
@@ -99,36 +259,6 @@ module Markdast
         }
       end
 
-      def push_delim_run(token_id)
-        start_byte = @tokens.start_byte(token_id)
-        end_byte = @tokens.end_byte(token_id)
-        char_byte = @tokens.int1(token_id)
-        count = @tokens.int2(token_id)
-        flags = @tokens.int3(token_id)
-        can_open = (flags & 0b10) != 0
-        can_close = (flags & 0b01) != 0
-
-        text = char_byte.chr * count
-        node_id = @arena.add_node(
-          NodeType::TEXT,
-          source_start: start_byte,
-          source_len: end_byte - start_byte,
-          str1: text
-        )
-        @arena.append_child(@parent_id, node_id)
-        @provisional_nodes[node_id] = true
-
-        @delimiter_stack << {
-          node_id: node_id,
-          char: char_byte.chr,
-          count: count,
-          can_open: can_open,
-          can_close: can_close
-        }
-      end
-
-      # Returns the next token id to resume at, or nil to let the caller
-      # advance by one (treating `]` as plain text).
       def resolve_rbracket(rbracket_token_id)
         opener_index = nil
         i = @bracket_stack.length - 1
@@ -162,13 +292,9 @@ module Markdast
         next_token_after(match[:end_byte])
       end
 
-      # Looks at @source starting just after the `]`. If it begins with `(`,
-      # parses `(destination[ "title"])` and returns
-      #   { end_byte:, destination:, title: }
-      # otherwise nil.
       def try_inline_link(start_byte)
         return nil if start_byte >= @source.bytesize
-        return nil unless @source.getbyte(start_byte) == 0x28 # (
+        return nil unless @source.getbyte(start_byte) == 0x28
 
         body_start = start_byte + 1
         depth = 1
@@ -181,8 +307,6 @@ module Markdast
             depth -= 1
             break if depth.zero?
           elsif b == 0x0A
-            # Inline destinations can't span paragraph breaks; rather than
-            # try to be clever, treat this as no-match.
             return nil
           end
           index += 1
@@ -193,20 +317,15 @@ module Markdast
         destination, title = split_destination_and_title(body)
         return nil if destination.nil? || destination.empty?
 
-        {
-          end_byte: index + 1,
-          destination: destination,
-          title: title
-        }
+        { end_byte: index + 1, destination: destination, title: title }
       end
 
-      # Reference forms (full / collapsed / shortcut) starting just after `]`.
       def try_reference_link(opener, rbracket_token_id, start_byte)
         label_start = @tokens.end_byte(opener[:token_id])
         label_end = @tokens.start_byte(rbracket_token_id)
         text_label = @source.byteslice(label_start, label_end - label_start).to_s
 
-        if start_byte < @source.bytesize && @source.getbyte(start_byte) == 0x5B # [
+        if start_byte < @source.bytesize && @source.getbyte(start_byte) == 0x5B
           ref_label, after_byte = read_reference_label(start_byte)
           return nil unless after_byte
           lookup = ref_label.empty? ? text_label : ref_label
@@ -215,21 +334,18 @@ module Markdast
           return { end_byte: after_byte, destination: ref[:destination], title: ref[:title] }
         end
 
-        # Shortcut form: just `[label]`
         ref = @references[normalize_reference_label(text_label)]
         return nil unless ref
         { end_byte: start_byte, destination: ref[:destination], title: ref[:title] }
       end
 
-      # Reads a `[label]` starting at start_byte. Returns [label, end_byte]
-      # where end_byte is one past the closing `]`, or [nil, nil].
       def read_reference_label(start_byte)
         return [nil, nil] unless @source.getbyte(start_byte) == 0x5B
 
         i = start_byte + 1
         while i < @source.bytesize
           b = @source.getbyte(i)
-          if b == 0x5D # ]
+          if b == 0x5D
             return [@source.byteslice(start_byte + 1, i - start_byte - 1).to_s, i + 1]
           elsif b == 0x5C && i + 1 < @source.bytesize
             i += 2
@@ -241,55 +357,47 @@ module Markdast
       end
 
       def finalize_link(opener, opener_index, rbracket_token_id, match)
-        opener_start_byte = @tokens.start_byte(opener[:token_id])
+        opener_start = @tokens.start_byte(opener[:token_id])
         link_kind = opener[:image] ? NodeType::IMAGE : NodeType::LINK
-        link_id = @arena.add_node(
-          link_kind,
-          source_start: opener_start_byte,
-          source_len: match[:end_byte] - opener_start_byte,
+        link_id = add_arena_node(
+          link_kind, opener_start, match[:end_byte],
           str1: sanitize_destination(match[:destination]),
           str2: match[:title]
         )
 
-        # Insert the new node right before the opener's provisional TEXT so
-        # that any content between opener and the new node's eventual end
-        # stays in document order.
         @arena.insert_before(@parent_id, opener[:node_id], link_id)
 
-        # All content between opener[:node_id] and the parent's last_child
-        # (exclusive of opener[:node_id] itself) belongs inside the link.
         first_inside = @arena.next_sibling(opener[:node_id])
         last_inside = @arena.last_child(@parent_id)
         if first_inside != -1 && last_inside != -1 && first_inside != link_id
           @arena.reparent(link_id, first_inside, last_inside)
         end
 
-        # Drop the opener's provisional TEXT node.
         @provisional_nodes.delete(opener[:node_id])
         @arena.detach(opener[:node_id])
 
-        # Run process_emphasis on the delimiter run entries that opened
-        # inside this bracket pair. Their arena nodes are now under
-        # link_id, so emphasis nodes are constructed in the right scope.
         inner_delims = @delimiter_stack.slice!(opener[:delim_stack_size]..) || []
         process_emphasis(inner_delims)
 
         @bracket_stack.delete_at(opener_index)
 
-        # Per spec: once a link is formed, any earlier `[` brackets become
-        # inactive so they can't open a nested link. Image brackets are
-        # unaffected.
         unless opener[:image]
           @bracket_stack.each { |b| b[:active] = false unless b[:image] }
         end
       end
 
       def next_token_after(byte_offset)
-        # Find the first token whose start_byte >= byte_offset.
         id = 0
         last = @tokens.length
         while id < last
-          return id if @tokens.start_byte(id) >= byte_offset
+          s = @tokens.start_byte(id)
+          e = @tokens.end_byte(id)
+          if s >= byte_offset
+            return id
+          elsif e > byte_offset
+            append_text(byte_offset, e, nil) if @tokens.kind(id) == TokenKind::TEXT
+            return id + 1
+          end
           id += 1
         end
         last
@@ -316,54 +424,31 @@ module Markdast
         label.to_s.strip.downcase.gsub(/[ \t\r\n]+/, " ")
       end
 
-      # Try to close the CODE_DELIMITER token at opener_id with a later
-      # CODE_DELIMITER of the same run length. On success emits a CODE_SPAN
-      # node and returns the token index immediately after the closer.
-      # On failure returns nil so the caller can treat the opener as TEXT.
-      def resolve_code_span(opener_id)
-        run_len = @tokens.int1(opener_id)
-        search_id = opener_id + 1
-        total = @tokens.length
-        while search_id < total
-          if @tokens.kind(search_id) == TokenKind::CODE_DELIMITER &&
-             @tokens.int1(search_id) == run_len
-            emit_code_span(opener_id, search_id)
-            return search_id + 1
-          end
-          search_id += 1
-        end
-        nil
-      end
+      # --------------------------- delim runs / emphasis ------------------
 
-      def emit_code_span(opener_id, closer_id)
-        body_start = @tokens.end_byte(opener_id)
-        body_end = @tokens.start_byte(closer_id)
-        span_start = @tokens.start_byte(opener_id)
-        span_end = @tokens.end_byte(closer_id)
-        raw = @source.byteslice(body_start, body_end - body_start).to_s
-        node = @arena.add_node(
-          NodeType::CODE_SPAN,
-          source_start: span_start,
-          source_len: span_end - span_start,
-          str1: normalize_code_span(raw)
+      def push_delim_run(token_id)
+        char_byte = @tokens.int1(token_id)
+        count = @tokens.int2(token_id)
+        flags = @tokens.int3(token_id)
+
+        text = char_byte.chr * count
+        node_id = add_arena_node(
+          NodeType::TEXT,
+          @tokens.start_byte(token_id), @tokens.end_byte(token_id),
+          str1: text
         )
-        @arena.append_child(@parent_id, node)
+        @arena.append_child(@parent_id, node_id)
+        @provisional_nodes[node_id] = true
+
+        @delimiter_stack << {
+          node_id: node_id,
+          char: char_byte.chr,
+          count: count,
+          can_open: (flags & 0b10) != 0,
+          can_close: (flags & 0b01) != 0
+        }
       end
 
-      # CommonMark code span normalization: newlines become spaces; if the
-      # resulting string has both a leading and trailing space and at least
-      # one non-space character, one of each is removed.
-      def normalize_code_span(text)
-        text = text.tr("\n", " ")
-        if text.length >= 2 && text.start_with?(" ") && text.end_with?(" ") && text.match?(/[^ ]/)
-          text = text[1..-2]
-        end
-        text
-      end
-
-      # CommonMark spec 6.2 process_emphasis algorithm. Operates on a
-      # delimiter stack passed in by the caller so nested scopes (link /
-      # image interiors) can each be resolved independently.
       def process_emphasis(stack)
         openers_bottom = { "*" => -1, "_" => -1 }
         closer_idx = 0
@@ -380,10 +465,6 @@ module Markdast
           while opener_idx > openers_bottom[closer[:char]]
             opener = stack[opener_idx]
             if opener[:can_open] && opener[:char] == closer[:char]
-              # Sum-of-3 rule: when either side is both open- and
-              # close-capable and the combined count is a multiple of 3,
-              # the pair is rejected — unless both individual counts are
-              # also multiples of 3.
               skip = false
               if (opener[:can_close] || closer[:can_open]) &&
                  ((opener[:count] + closer[:count]) % 3).zero? &&
@@ -415,23 +496,16 @@ module Markdast
           opener_node = opener[:node_id]
           closer_node = closer[:node_id]
 
-          # The matched portion comes from the *right* end of the opener
-          # text and the *left* end of the closer text. Compute the byte
-          # span the new emphasis node should cover.
-          opener_match_start = @arena.source_start(opener_node) +
-                               @arena.source_len(opener_node) - strength
-          closer_match_end = @arena.source_start(closer_node) + strength
+          if @track_source
+            opener_match_start = @arena.source_start(opener_node) +
+                                 @arena.source_len(opener_node) - strength
+            closer_match_end = @arena.source_start(closer_node) + strength
+          else
+            opener_match_start = -1
+            closer_match_end = 0
+          end
+          emphasis_id = add_arena_node(kind, opener_match_start, closer_match_end)
 
-          emphasis_id = @arena.add_node(
-            kind,
-            source_start: opener_match_start,
-            source_len: closer_match_end - opener_match_start
-          )
-
-          # Reparent the content between opener and closer *before* inserting
-          # the new node into the tree. The emphasis ends up between the
-          # two delimiter nodes, so later iterations with reduced counts
-          # find the already-built inner emphasis as their inner content.
           first_inside = @arena.next_sibling(opener_node)
           last_inside = @arena.prev_sibling(closer_node)
           if first_inside != -1 && last_inside != -1 &&
@@ -451,8 +525,10 @@ module Markdast
             opener[:count] -= strength
             str = @arena.str1(opener_node)
             @arena.replace_str1(opener_node, str[0...-strength])
-            new_end = @arena.source_start(opener_node) + @arena.source_len(opener_node) - strength
-            @arena.update_span(opener_node, @arena.source_start(opener_node), new_end)
+            if @track_source
+              new_end = @arena.source_start(opener_node) + @arena.source_len(opener_node) - strength
+              @arena.update_span(opener_node, @arena.source_start(opener_node), new_end)
+            end
           end
 
           if closer[:count] == strength
@@ -463,117 +539,16 @@ module Markdast
             closer[:count] -= strength
             str = @arena.str1(closer_node)
             @arena.replace_str1(closer_node, str[strength..])
-            new_start = @arena.source_start(closer_node) + strength
-            new_end = @arena.source_start(closer_node) + @arena.source_len(closer_node)
-            @arena.update_span(closer_node, new_start, new_end)
+            if @track_source
+              new_start = @arena.source_start(closer_node) + strength
+              new_end = @arena.source_start(closer_node) + @arena.source_len(closer_node)
+              @arena.update_span(closer_node, new_start, new_end)
+            end
           end
         end
 
-        # Anything left on the stack is unmatched; release its provisional
-        # marker so its text remains as plain content in the arena.
         stack.each { |e| @provisional_nodes.delete(e[:node_id]) }
         stack.clear
-      end
-
-      def append_text(start_byte, end_byte, literal)
-        last = @arena.last_child(@parent_id)
-        if last != -1 && @arena.type(last) == NodeType::TEXT &&
-           adjacent?(last, start_byte) && !@provisional_nodes[last]
-          merge_text(last, literal, start_byte, end_byte)
-          return
-        end
-
-        node = @arena.add_node(
-          NodeType::TEXT,
-          source_start: start_byte,
-          source_len: end_byte - start_byte,
-          str1: literal
-        )
-        @arena.append_child(@parent_id, node)
-      end
-
-      # Two TEXT nodes can be merged when the previous one is adjacent in
-      # the source (its source end == start_byte). Span-based and literal-
-      # based TEXT can be combined by materializing the span side via
-      # byteslice; the resulting node carries a literal str1 that covers
-      # the union span.
-      def adjacent?(last_id, start_byte)
-        @arena.source_start(last_id) + @arena.source_len(last_id) == start_byte
-      end
-
-      def merge_text(last_id, literal, start_byte, end_byte)
-        last_lit = @arena.str1(last_id)
-        if literal.nil? && last_lit.nil?
-          # Pure span-based merge: just extend the span.
-          @arena.update_span(last_id, @arena.source_start(last_id), end_byte)
-          return
-        end
-
-        materialized_last = last_lit || @arena.text(last_id).to_s
-        materialized_incoming = literal || @source.byteslice(start_byte, end_byte - start_byte).to_s
-        @arena.replace_str1(last_id, materialized_last + materialized_incoming)
-        @arena.update_span(last_id, @arena.source_start(last_id), end_byte)
-      end
-
-      def append_line_ending(id)
-        start_byte = @tokens.start_byte(id)
-        end_byte = @tokens.end_byte(id)
-        trailing_spaces = @tokens.int1(id)
-        backslash_form = @tokens.int2(id) == 1
-
-        if trailing_spaces >= 2 || backslash_form
-          strip_trailing_spaces(trailing_spaces) if trailing_spaces.positive?
-          kind = NodeType::HARDBREAK
-        else
-          kind = NodeType::SOFTBREAK
-        end
-
-        node = @arena.add_node(
-          kind,
-          source_start: start_byte,
-          source_len: end_byte - start_byte,
-          str1: "\n"
-        )
-        @arena.append_child(@parent_id, node)
-      end
-
-      # Hardbreak rule: the trailing >= 2 spaces preceding the newline are
-      # not part of the rendered text, so trim them from the previous
-      # TEXT node (literal or span).
-      def strip_trailing_spaces(count)
-        last = @arena.last_child(@parent_id)
-        return if last == -1 || @arena.type(last) != NodeType::TEXT
-
-        lit = @arena.str1(last)
-        if lit
-          new_lit = lit.sub(/ {#{count},}\z/, "")
-          @arena.replace_str1(last, new_lit)
-        end
-
-        new_len = @arena.source_len(last) - count
-        new_len = 0 if new_len.negative?
-        @arena.update_span(last, @arena.source_start(last), @arena.source_start(last) + new_len)
-      end
-
-      def append_html_inline(id)
-        node = @arena.add_node(
-          NodeType::HTML_INLINE,
-          source_start: @tokens.start_byte(id),
-          source_len: @tokens.end_byte(id) - @tokens.start_byte(id),
-          str1: @tokens.str1(id)
-        )
-        @arena.append_child(@parent_id, node)
-      end
-
-      def append_autolink(id, destination, label)
-        link_id = @arena.add_node(
-          NodeType::LINK,
-          source_start: @tokens.start_byte(id),
-          source_len: @tokens.end_byte(id) - @tokens.start_byte(id),
-          str1: destination
-        )
-        @arena.append_child(@parent_id, link_id)
-        @arena.append_child(link_id, @arena.add_node(NodeType::TEXT, str1: label))
       end
     end
   end

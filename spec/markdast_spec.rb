@@ -378,9 +378,12 @@ RSpec.describe Markdast do
       # so mixing char-based and byte-based offsets corrupted HTML output
       # for Cyrillic / CJK / other multi-byte input.
 
-      it "renders Cyrillic emphasis without HTML corruption" do
+      it "renders Cyrillic letters without HTML corruption (no emphasis per spec)" do
+        # CommonMark example 378: `_` adjacent to word characters cannot
+        # open / close emphasis, so this input renders without any <em>.
+        # The key property is that no bytes get mangled in the output.
         expect(described_class.render_html("_пристаням_стремятся"))
-          .to eq("<p><em>пристаням</em>стремятся</p>\n")
+          .to eq("<p>_пристаням_стремятся</p>\n")
       end
 
       it "renders Japanese emphasis without HTML corruption" do

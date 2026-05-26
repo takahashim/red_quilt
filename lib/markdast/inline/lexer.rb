@@ -14,7 +14,11 @@ module Markdast
       # Bytes whose appearance ends a TEXT run. Anything not in this set is
       # plain text content. Newline is included so LINE_ENDING gets its own
       # token.
-      SPECIAL_RE = /[*_`\[\]!<&\\\n]/.freeze
+      SPECIAL_BYTES = begin
+        a = Array.new(256, false)
+        [0x2A, 0x5F, 0x60, 0x5B, 0x5D, 0x21, 0x3C, 0x26, 0x5C, 0x0A].each { |b| a[b] = true }
+        a.freeze
+      end
 
       # \G-anchored regexes reused from the legacy InlineParser. Each is
       # invoked with String#match(re, @pos), so the match must begin at
@@ -72,12 +76,17 @@ module Markdast
 
       def scan_text(tokens)
         start = @pos
-        # Search from @pos + 1 so we always make forward progress, even if
-        # the current byte is itself "special" but for some reason fell
-        # through to scan_text (e.g. a `&` that didn't match ENTITY_RE).
-        nxt = @source.index(SPECIAL_RE, @pos + 1)
-        @pos = nxt && nxt < @end ? nxt : @end
-        @pos = start + 1 if @pos == start && @pos < @end
+        # Always make progress: consume the current byte even if it's a
+        # "special" byte that fell through to scan_text (e.g. a `&` that
+        # didn't match ENTITY_RE). Subsequent bytes are added to the TEXT
+        # run until we hit a special byte. Byte-by-byte walk avoids the
+        # String#index pitfall of char vs byte offsets on multibyte input.
+        @pos += 1 if @pos < @end
+        while @pos < @end
+          b = @source.getbyte(@pos)
+          break if SPECIAL_BYTES[b]
+          @pos += 1
+        end
         tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos) if @pos > start
       end
 
