@@ -304,17 +304,21 @@ module Mdarena
       end
 
       def resolve_rbracket(rbracket_token_id, search_from_id)
-        opener_index = nil
-        i = @bracket_stack.length - 1
-        while i >= 0
-          if @bracket_stack[i].active
-            opener_index = i
-            break
-          end
-          i -= 1
+        # CommonMark spec algorithm: peek the TOP of the bracket stack
+        # (don't search past inactive brackets). If the top opener is
+        # inactive, pop it and turn `]` into text — an inactive `[`
+        # earlier in the input must not be jumped over to reach an
+        # outer `[` or `![`, otherwise nested-image precedence (spec
+        # example 520) resolves the wrong way.
+        if @bracket_stack.empty?
+          append_text(@tokens.start_byte(rbracket_token_id),
+                      @tokens.end_byte(rbracket_token_id), "]")
+          return nil
         end
 
-        unless opener_index
+        opener_index = @bracket_stack.length - 1
+        unless @bracket_stack[opener_index].active
+          @bracket_stack.pop
           append_text(@tokens.start_byte(rbracket_token_id),
                       @tokens.end_byte(rbracket_token_id), "]")
           return nil

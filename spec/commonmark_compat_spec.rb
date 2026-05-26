@@ -876,6 +876,7 @@ RSpec.describe "CommonMark compatibility" do
     { number: 541, section: "Links", markdown: "[Foo\n  bar]: /url\n\n[Baz][Foo bar]\n", html: "<p><a href=\"/url\">Baz</a></p>\n" },
     { number: 307, section: "Lists", markdown: "- foo\n  - bar\n    - baz\n\n\n      bim\n", html: "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>\n<p>baz</p>\n<p>bim</p>\n</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n" },
     { number: 319, section: "Lists", markdown: "- a\n  - b\n\n    c\n- d\n", html: "<ul>\n<li>a\n<ul>\n<li>\n<p>b</p>\n<p>c</p>\n</li>\n</ul>\n</li>\n<li>d</li>\n</ul>\n" },
+    { number: 520, section: "Links", markdown: "![[[foo](uri1)](uri2)](uri3)\n", html: "<p><img src=\"uri3\" alt=\"[foo](uri2)\" /></p>\n" },
   ].freeze
 
   KNOWN_GAPS = [].freeze
