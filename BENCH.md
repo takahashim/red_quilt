@@ -1,5 +1,43 @@
 # Markdast Performance Benchmarks
 
+## v1.1.0 Optimized (2026-05-26)
+
+**Environment**: Ruby 3.4.1, Apple Silicon
+
+**Methodology**: `benchmark-ips` (5s warmup + measurement), `Markdast.parse()`
+
+**Optimizations applied**:
+- Regex-based `scan_text()` (replaces per-char array search)
+- Incremental delimiter counting in `find_emphasis_closing()` (O(n) vs O(n²))
+- Direct index operations instead of `remaining` string copies
+- Accessor methods (`char_before`, `char_at`, `match_at`, `rindex_from`) to avoid reflection/copying
+
+### Results
+
+```
+Fixture                      i/s      Time/iter   vs. v1.0.0
+──────────────────────────────────────────────────────────────
+short_paragraph          10,391     96.24 μs      1.0x (baseline)
+  long_paragraph            550      1.82 ms     18.87x slower
+      many_links            532      1.88 ms     19.52x slower
+  nested_emphasis           390      2.56 ms     26.63x slower
+    mixed_markup           342      2.92 ms     30.37x slower
+    deep_nesting           222      4.51 ms     46.90x slower
+```
+
+### v1.0.0 → v1.1.0 Speedup
+
+| Fixture | v1.0.0 | v1.1.0 | Speedup |
+|---------|--------|--------|---------|
+| short_paragraph | 6,586 | 10,391 | **+58%** |
+| many_links | 515 | 532 | +3% |
+| mixed_markup | 134 | 342 | **+155% (2.5x)** |
+| nested_emphasis | 89 | 390 | **+338% (4.4x)** |
+| deep_nesting | 69 | 222 | **+222% (3.2x)** |
+| long_paragraph | 37 | 550 | **+1,387% (14.9x)** ✨ |
+
+---
+
 ## v1.0.0 Baseline (2026-05-26)
 
 **Environment**: Ruby 3.4.1, Apple Silicon
@@ -59,8 +97,11 @@ ruby spec/bench_inline.rb >> BENCH_LOG.txt
 
 ---
 
-## Next Steps
+## Performance Optimization Summary
 
-- [ ] Phase 3-4: Periodically re-run (no expected changes during feature work)
-- [ ] Phase 5: Experimental optimizations, measure delta
-- [ ] Phase 6: Post-optimization baseline (expect 2-3x improvement on long documents)
+**v1.0 → v1.1 Results**:
+- ✅ Achieved **2.5–14.9x improvement** across emphasis-heavy fixtures (target: 2–3x)
+- ✅ Zero regression on `many_links` and `short_paragraph`
+- ✅ All 70 CommonMark tests passing
+
+**Optimizations are production-ready**. Next work: v1.2 features (formatter, transformer, diagnostics) or v2.0 planning.
