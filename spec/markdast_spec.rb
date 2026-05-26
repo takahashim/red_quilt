@@ -301,5 +301,59 @@ RSpec.describe Markdast do
       location = heading.source_location
       expect(location).to be_a(Hash) if location
     end
+
+    it "sanitizes unsafe URL schemes" do
+      # javascript: should be blocked
+      doc = described_class.parse('[link](javascript:alert(1))')
+      link = doc.root.children.first.children.first
+      html = described_class.render_html('[link](javascript:alert(1))')
+      expect(html).to include('href=""')
+
+      # vbscript: should be blocked
+      html = described_class.render_html('[link](vbscript:msgbox)')
+      expect(html).to include('href=""')
+
+      # data: should be blocked
+      html = described_class.render_html('[link](data:text/html,<script>alert(1)</script>)')
+      expect(html).to include('href=""')
+    end
+
+    it "allows safe URL schemes" do
+      # ftp should be allowed
+      html = described_class.render_html('[link](ftp://example.com/file)')
+      expect(html).to include('href="ftp://example.com/file"')
+
+      # tel should be allowed
+      html = described_class.render_html('[link](tel:+1234567890)')
+      expect(html).to include('href="tel:+1234567890"')
+
+      # ssh should be allowed
+      html = described_class.render_html('[link](ssh://example.com)')
+      expect(html).to include('href="ssh://example.com"')
+    end
+
+    it "renders code block info string using first word only" do
+      # info string with multiple words
+      source = "```ruby test\ncode\n```"
+      html = described_class.render_html(source)
+      expect(html).to include('class="language-ruby"')
+      expect(html).not_to include('test')
+    end
+
+    it "renders image alt text with line breaks as spaces" do
+      # image alt with soft break
+      source = "![alt text\nwith break](/img.png)"
+      html = described_class.render_html(source)
+      expect(html).to include('alt="alt text with break"')
+    end
+
+    it "renders nested block structures correctly" do
+      # blockquote > list > paragraph
+      source = "> - item 1\n> - item 2"
+      html = described_class.render_html(source)
+      expect(html).to include("<blockquote>")
+      expect(html).to include("<ul>")
+      expect(html).to include("<li>")
+    end
   end
 end

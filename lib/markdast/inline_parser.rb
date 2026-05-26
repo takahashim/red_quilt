@@ -4,7 +4,7 @@ require "cgi"
 
 module Markdast
   class InlineParser
-    SAFE_SCHEMES = %w[http https mailto].freeze
+    SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
 
     def initialize(arena, parent_id:, source_text:, base_offset: nil, references: {})
       @arena = arena

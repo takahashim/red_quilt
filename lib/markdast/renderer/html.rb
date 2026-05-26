@@ -55,8 +55,8 @@ module Markdast
           @out << "</li>\n"
         when NodeType::CODE_BLOCK
           @out << "<pre><code"
-          info = @arena.str2(node_id).to_s.strip
-          @out << %( class="language-#{CGI.escapeHTML(info)}") unless info.empty?
+          info_word = @arena.str2(node_id).to_s.split.first.to_s
+          @out << %( class="language-#{CGI.escapeHTML(info_word)}") unless info_word.empty?
           @out << ">"
           @out << CGI.escapeHTML(@arena.text(node_id).to_s)
           @out << "</code></pre>\n"
@@ -164,6 +164,8 @@ module Markdast
           case @arena.type(child_id)
           when NodeType::TEXT, NodeType::CODE_SPAN
             text << @arena.text(child_id).to_s
+          when NodeType::SOFTBREAK, NodeType::HARDBREAK
+            text << " "
           else
             text << collect_plain_text(child_id)
           end

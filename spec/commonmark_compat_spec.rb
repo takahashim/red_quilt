@@ -244,6 +244,24 @@ RSpec.describe "CommonMark compatibility" do
       section: "Block quotes",
       markdown: "> [foo]: /url\n>\n> [foo]\n",
       html: "<blockquote>\n<p><a href=\"/url\">foo</a></p>\n</blockquote>\n"
+    },
+    {
+      number: 89,
+      section: "Indented code blocks",
+      markdown: "    foo\n    bar\n",
+      html: "<pre><code>foo\nbar\n</code></pre>\n"
+    },
+    {
+      number: 98,
+      section: "Fenced code blocks",
+      markdown: "```ruby\ndef foo(x)\n  return 3\nend\n```\n",
+      html: "<pre><code class=\"language-ruby\">def foo(x)\n  return 3\nend\n</code></pre>\n"
+    },
+    {
+      number: 105,
+      section: "Fenced code blocks",
+      markdown: "```ruby test\ncode\n```\n",
+      html: "<pre><code class=\"language-ruby\">code\n</code></pre>\n"
     }
   ].freeze
 
