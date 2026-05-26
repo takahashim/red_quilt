@@ -6,6 +6,67 @@
 
 ---
 
+## 0. クイックスタート
+
+下のコードはそのままコピペで動きます。Arena が「source 文字列を中心に node id でツリーを組み立てる」ものだと、これだけで掴めるはずです。
+
+```ruby
+require "mdarena"
+
+source = "Hello *world*"
+arena = Mdarena::Arena.new(source)
+
+# (a) ノードを作る。戻り値は node id (Integer)
+para_id  = arena.add_node(Mdarena::NodeType::PARAGRAPH,
+                          source_start: 0, source_len: source.bytesize)
+text_id  = arena.add_node(Mdarena::NodeType::TEXT,
+                          source_start: 0, source_len: 6)   # "Hello "
+em_id    = arena.add_node(Mdarena::NodeType::EMPHASIS,
+                          source_start: 6, source_len: 7)   # "*world*"
+inner_id = arena.add_node(Mdarena::NodeType::TEXT,
+                          source_start: 7, source_len: 5)   # "world"
+
+# (b) 親子関係を組む
+arena.append_child(para_id, text_id)
+arena.append_child(para_id, em_id)
+arena.append_child(em_id,   inner_id)
+
+# (c) 内容を取り出す
+puts "type:    #{arena.type_name(para_id)}"
+puts "text:    #{arena.text(text_id).inspect}"
+puts "inner:   #{arena.text(inner_id).inspect}"
+puts "span:    #{arena.source_span(em_id).inspect}"
+
+# (d) 子を走査する (ブロック形式・Enumerator なし)
+puts "children of paragraph:"
+arena.each_child(para_id) do |child_id|
+  puts "  #{arena.type_name(child_id)}: #{arena.text(child_id).inspect}"
+end
+```
+
+出力:
+
+```
+type:    paragraph
+text:    "Hello "
+inner:   "world"
+span:    #<Mdarena::SourceSpan:0x... @start_byte=6, @end_byte=13>
+children of paragraph:
+  text: "Hello "
+  emphasis: "*world*"
+```
+
+ポイント:
+
+- `add_node` は **node id (Integer)** を返す。以降の API は全部この id をキーにする
+- `source_start` / `source_len` は **元の source 文字列のバイト範囲**。文字列のコピーは持たない
+- `text(id)` は str1 があればそれを返し、なければ `source` を byteslice する
+- `each_child(id)` がホットパスで使う基本の走査 API
+
+これだけ動かせれば、後の章は「実際にこの API は何を保証しているのか / どう使うべきか」の補足として読めます。
+
+---
+
 ## 1. 設計の要点
 
 Arena は AST を **オブジェクトツリーではなく parallel array** として表現します。
