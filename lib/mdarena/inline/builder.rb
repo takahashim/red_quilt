@@ -229,26 +229,34 @@ module Mdarena
 
       # --------------------------- code spans -----------------------------
 
+      # Find the closing backtick run for a code span by scanning the
+      # source bytes directly. CommonMark: backslash escapes do not
+      # apply inside a code span, so once we're past the opener every
+      # backtick run is a real candidate (token-level ESCAPED_CHAR is
+      # ignored).
       def resolve_code_span(opener_id)
         run_len = @tokens.int1(opener_id)
-        search_id = opener_id + 1
-        total = @tokens.length
-        while search_id < total
-          if @tokens.kind(search_id) == TokenKind::CODE_DELIMITER &&
-             @tokens.int1(search_id) == run_len
-            emit_code_span(opener_id, search_id)
-            return search_id + 1
+        pos = @tokens.end_byte(opener_id)
+        while pos < @source.bytesize
+          if @source.getbyte(pos) == 0x60
+            run_start = pos
+            pos += 1 while pos < @source.bytesize && @source.getbyte(pos) == 0x60
+            if pos - run_start == run_len
+              emit_code_span_bytes(opener_id, run_start, pos)
+              return next_token_after(pos, opener_id + 1)
+            end
+          else
+            pos += 1
           end
-          search_id += 1
         end
         nil
       end
 
-      def emit_code_span(opener_id, closer_id)
+      def emit_code_span_bytes(opener_id, closer_start_byte, closer_end_byte)
         body_start = @tokens.end_byte(opener_id)
-        body_end = @tokens.start_byte(closer_id)
+        body_end = closer_start_byte
         span_start = @tokens.start_byte(opener_id)
-        span_end = @tokens.end_byte(closer_id)
+        span_end = closer_end_byte
         raw = @source.byteslice(body_start, body_end - body_start).to_s
         node = add_arena_node(NodeType::CODE_SPAN, span_start, span_end,
                               str1: normalize_code_span(raw))

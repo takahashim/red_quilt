@@ -285,7 +285,11 @@ module Mdarena
       end
       index += 1 if index < lines.length
 
-      code = content_lines.map(&:content).join("\n")
+      # Each content line is stripped of up to the fence's own leading
+      # indent (CommonMark spec: a fence indented by N spaces strips up
+      # to N spaces from every content line, but never more).
+      strip_re = /\A {0,#{fence[:indent] || 0}}/
+      code = content_lines.map { |l| l.content.sub(strip_re, "") }.join("\n")
       code << "\n" unless content_lines.empty?
       source_start = content_lines.empty? ? start_line.start_byte : content_lines.first.start_byte
       source_end = content_lines.empty? ? start_line.end_byte : content_lines.last.end_byte
@@ -686,10 +690,20 @@ module Mdarena
     end
 
     def fenced_code_start(text)
-      match = /\A {0,3}(`{3,}|~{3,})[ \t]*(.*?)\s*\z/.match(text)
+      match = /\A( {0,3})(`{3,}|~{3,})[ \t]*(.*?)\s*\z/.match(text)
       return unless match
 
-      { char: match[1][0], count: match[1].length, info: match[2] }
+      info = match[3]
+      # CommonMark: a backtick-style fence cannot have backticks in its
+      # info string (they'd be ambiguous with the fence itself).
+      return if match[2].start_with?("`") && info.include?("`")
+
+      {
+        char: match[2][0],
+        count: match[2].length,
+        info: info,
+        indent: match[1].length
+      }
     end
 
     def fenced_code_close?(text, char, count)

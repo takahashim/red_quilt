@@ -762,6 +762,13 @@ RSpec.describe "CommonMark compatibility" do
     { number: 622, section: "Raw HTML", markdown: "<a href='bar'title=title>\n", html: "<p>&lt;a href='bar'title=title&gt;</p>\n" },
     { number: 645, section: "Hard line breaks", markdown: "foo  \n", html: "<p>foo</p>\n" },
     { number: 650, section: "Textual content", markdown: "hello $.;'there\n", html: "<p>hello $.;'there</p>\n" },
+    { number: 131, section: "Fenced code blocks", markdown: " ```\n aaa\naaa\n```\n", html: "<pre><code>aaa\naaa\n</code></pre>\n" },
+    { number: 132, section: "Fenced code blocks", markdown: "  ```\naaa\n  aaa\naaa\n  ```\n", html: "<pre><code>aaa\naaa\naaa\n</code></pre>\n" },
+    { number: 133, section: "Fenced code blocks", markdown: "   ```\n   aaa\n    aaa\n  aaa\n   ```\n", html: "<pre><code>aaa\n aaa\naaa\n</code></pre>\n" },
+    { number: 138, section: "Fenced code blocks", markdown: "``` ```\naaa\n", html: "<p><code> </code>\naaa</p>\n" },
+    { number: 145, section: "Fenced code blocks", markdown: "``` aa ```\nfoo\n", html: "<p><code>aa</code>\nfoo</p>\n" },
+    { number: 338, section: "Code spans", markdown: "`foo\\`bar`\n", html: "<p><code>foo\\</code>bar`</p>\n" },
+    { number: 347, section: "Code spans", markdown: "```foo``\n", html: "<p>```foo``</p>\n" },
   ].freeze
 
   KNOWN_GAPS = [
