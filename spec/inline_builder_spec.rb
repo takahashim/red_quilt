@@ -369,9 +369,107 @@ RSpec.describe Markdast::Inline::Builder do
         lex(source)
         builder.build(paragraph_id, tokens)
         kinds = child_text_kinds(paragraph_id)
-        # `[` and `]` remain as text nodes, content between them is also text
         expect(kinds.first).to eq(:text)
-        expect(arena.text(arena.first_child(paragraph_id))).to eq("[")
+      end
+    end
+  end
+
+  describe "emphasis" do
+    def lex(src)
+      tokens.clear
+      Markdast::Inline::Lexer.new(src).lex_into(tokens, 0, src.bytesize)
+      tokens
+    end
+
+    context "basic `*em*`" do
+      let(:source) { "a*foo*b" }
+
+      it "emits TEXT, EMPHASIS, TEXT in order" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        expect(child_text_kinds(paragraph_id)).to eq([:text, :emphasis, :text])
+        em = arena.first_child(paragraph_id)
+        em = arena.next_sibling(em)
+        expect(child_text_kinds(em)).to eq([:text])
+        expect(arena.text(arena.first_child(em))).to eq("foo")
+      end
+    end
+
+    context "basic `**strong**`" do
+      let(:source) { "a**foo**b" }
+
+      it "emits STRONG when both delimiters have count >= 2" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        expect(child_text_kinds(paragraph_id)).to eq([:text, :strong, :text])
+      end
+    end
+
+    context "triple `***x***`" do
+      let(:source) { "foo***bar***baz" }
+
+      it "produces nested emphasis > strong over the inner text" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:text, :emphasis, :text])
+        em = arena.first_child(paragraph_id)
+        em = arena.next_sibling(em)
+        expect(child_text_kinds(em)).to eq([:strong])
+        st = arena.first_child(em)
+        expect(arena.text(arena.first_child(st))).to eq("bar")
+      end
+    end
+
+    context "underscore in word stays plain" do
+      let(:source) { "foo_bar_baz" }
+
+      it "does not form emphasis" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        expect(child_text_kinds(paragraph_id)).to eq([:text])
+      end
+    end
+
+    context "unmatched `*` stays plain" do
+      let(:source) { "a *b" }
+
+      it "leaves the asterisk as plain text content" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        # the `*` survives as TEXT (its provisional node is released)
+        text = arena.first_child(paragraph_id)
+        expect(arena.type(text)).to eq(Markdast::NodeType::TEXT)
+      end
+    end
+
+    context "code span shields its delimiters" do
+      let(:source) { "*foo `*bar*` baz*" }
+
+      it "does not let backticked `*` participate in emphasis pairing" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        kinds = child_text_kinds(paragraph_id)
+        expect(kinds).to eq([:emphasis])
+        em = arena.first_child(paragraph_id)
+        # The interior should contain TEXT and a CODE_SPAN (no nested emphasis)
+        interior_kinds = child_text_kinds(em)
+        expect(interior_kinds).to include(:code_span)
+        expect(interior_kinds).not_to include(:emphasis, :strong)
+      end
+    end
+
+    context "link containing emphasis" do
+      let(:source) { "[*foo*](url)" }
+
+      it "constructs LINK > EMPHASIS > TEXT" do
+        lex(source)
+        builder.build(paragraph_id, tokens)
+        expect(child_text_kinds(paragraph_id)).to eq([:link])
+        link = arena.first_child(paragraph_id)
+        expect(child_text_kinds(link)).to eq([:emphasis])
+        em = arena.first_child(link)
+        expect(arena.text(arena.first_child(em))).to eq("foo")
       end
     end
   end

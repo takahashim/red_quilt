@@ -139,6 +139,13 @@ module Markdast
         prev_char = Flanking.char_before(@source, start, @start)
         next_char = Flanking.char_at(@source, @pos, @end)
         can_open, can_close = Flanking.can_open_close(char, prev_char, next_char)
+        # A run that can neither open nor close (e.g. underscores inside a
+        # word) can never participate in emphasis, so emit it as plain TEXT
+        # to allow text coalescing with neighbours.
+        if !can_open && !can_close
+          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @pos)
+          return
+        end
         flags = (can_open ? 0b10 : 0) | (can_close ? 0b01 : 0)
         tokens.emit(TokenKind::DELIM_RUN,
                     start_byte: start, end_byte: @pos,

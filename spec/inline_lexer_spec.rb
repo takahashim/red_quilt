@@ -145,10 +145,10 @@ RSpec.describe Markdast::Inline::Lexer do
   end
 
   describe "DELIM_RUN for _" do
-    it "is neither can_open nor can_close inside a word (foo_bar)" do
+    it "downgrades to TEXT inside a word (foo_bar) since it cannot flank" do
       result = lex("foo_bar")
       dr = result.each_id.find { |id| result.kind(id) == Markdast::Inline::TokenKind::DELIM_RUN }
-      expect(result.int3(dr)).to eq(0)
+      expect(dr).to be_nil
     end
 
     it "opens at the start of a word" do

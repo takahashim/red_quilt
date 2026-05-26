@@ -25,8 +25,9 @@ module Markdast
         @tokens = tokens
         @delimiter_stack = []
         @bracket_stack = []
+        @provisional_nodes = {} # node_id => true while still on a stack
         linear_pass
-        process_emphasis
+        process_emphasis(@delimiter_stack)
       end
 
       private
@@ -68,8 +69,10 @@ module Markdast
               id = next_id
               next
             end
+          when TokenKind::DELIM_RUN
+            push_delim_run(id)
           else
-            # DELIM_RUN is handled in commit 8.
+            # No-op for unrecognized kinds.
           end
           id += 1
         end
@@ -86,11 +89,41 @@ module Markdast
           str1: text
         )
         @arena.append_child(@parent_id, node_id)
+        @provisional_nodes[node_id] = true
         @bracket_stack << {
           token_id: token_id,
           node_id: node_id,
           image: image,
-          active: true
+          active: true,
+          delim_stack_size: @delimiter_stack.length
+        }
+      end
+
+      def push_delim_run(token_id)
+        start_byte = @tokens.start_byte(token_id)
+        end_byte = @tokens.end_byte(token_id)
+        char_byte = @tokens.int1(token_id)
+        count = @tokens.int2(token_id)
+        flags = @tokens.int3(token_id)
+        can_open = (flags & 0b10) != 0
+        can_close = (flags & 0b01) != 0
+
+        text = char_byte.chr * count
+        node_id = @arena.add_node(
+          NodeType::TEXT,
+          source_start: start_byte,
+          source_len: end_byte - start_byte,
+          str1: text
+        )
+        @arena.append_child(@parent_id, node_id)
+        @provisional_nodes[node_id] = true
+
+        @delimiter_stack << {
+          node_id: node_id,
+          char: char_byte.chr,
+          count: count,
+          can_open: can_open,
+          can_close: can_close
         }
       end
 
@@ -232,7 +265,14 @@ module Markdast
         end
 
         # Drop the opener's provisional TEXT node.
+        @provisional_nodes.delete(opener[:node_id])
         @arena.detach(opener[:node_id])
+
+        # Run process_emphasis on the delimiter run entries that opened
+        # inside this bracket pair. Their arena nodes are now under
+        # link_id, so emphasis nodes are constructed in the right scope.
+        inner_delims = @delimiter_stack.slice!(opener[:delim_stack_size]..) || []
+        process_emphasis(inner_delims)
 
         @bracket_stack.delete_at(opener_index)
 
@@ -321,14 +361,124 @@ module Markdast
         text
       end
 
-      def process_emphasis
-        # TODO(commit 8): delimiter stack resolution.
+      # CommonMark spec 6.2 process_emphasis algorithm. Operates on a
+      # delimiter stack passed in by the caller so nested scopes (link /
+      # image interiors) can each be resolved independently.
+      def process_emphasis(stack)
+        openers_bottom = { "*" => -1, "_" => -1 }
+        closer_idx = 0
+
+        while closer_idx < stack.length
+          closer = stack[closer_idx]
+          unless closer[:can_close]
+            closer_idx += 1
+            next
+          end
+
+          opener_idx = closer_idx - 1
+          found = false
+          while opener_idx > openers_bottom[closer[:char]]
+            opener = stack[opener_idx]
+            if opener[:can_open] && opener[:char] == closer[:char]
+              # Sum-of-3 rule: when either side is both open- and
+              # close-capable and the combined count is a multiple of 3,
+              # the pair is rejected — unless both individual counts are
+              # also multiples of 3.
+              skip = false
+              if (opener[:can_close] || closer[:can_open]) &&
+                 ((opener[:count] + closer[:count]) % 3).zero? &&
+                 !((opener[:count] % 3).zero? && (closer[:count] % 3).zero?)
+                skip = true
+              end
+              unless skip
+                found = true
+                break
+              end
+            end
+            opener_idx -= 1
+          end
+
+          unless found
+            openers_bottom[closer[:char]] = closer_idx - 1
+            unless closer[:can_open]
+              @provisional_nodes.delete(closer[:node_id])
+              stack.delete_at(closer_idx)
+            end
+            closer_idx += 1
+            next
+          end
+
+          opener = stack[opener_idx]
+          strength = [opener[:count], closer[:count]].min >= 2 ? 2 : 1
+          kind = strength == 2 ? NodeType::STRONG : NodeType::EMPHASIS
+
+          opener_node = opener[:node_id]
+          closer_node = closer[:node_id]
+
+          # The matched portion comes from the *right* end of the opener
+          # text and the *left* end of the closer text. Compute the byte
+          # span the new emphasis node should cover.
+          opener_match_start = @arena.source_start(opener_node) +
+                               @arena.source_len(opener_node) - strength
+          closer_match_end = @arena.source_start(closer_node) + strength
+
+          emphasis_id = @arena.add_node(
+            kind,
+            source_start: opener_match_start,
+            source_len: closer_match_end - opener_match_start
+          )
+
+          # Reparent the content between opener and closer *before* inserting
+          # the new node into the tree. The emphasis ends up between the
+          # two delimiter nodes, so later iterations with reduced counts
+          # find the already-built inner emphasis as their inner content.
+          first_inside = @arena.next_sibling(opener_node)
+          last_inside = @arena.prev_sibling(closer_node)
+          if first_inside != -1 && last_inside != -1 &&
+             first_inside != closer_node && last_inside != opener_node
+            @arena.reparent(emphasis_id, first_inside, last_inside)
+          end
+
+          parent_id = @arena.parent(opener_node)
+          @arena.insert_before(parent_id, closer_node, emphasis_id)
+
+          if opener[:count] == strength
+            @provisional_nodes.delete(opener_node)
+            @arena.detach(opener_node)
+            stack.delete_at(opener_idx)
+            closer_idx -= 1
+          else
+            opener[:count] -= strength
+            str = @arena.str1(opener_node)
+            @arena.replace_str1(opener_node, str[0...-strength])
+            new_end = @arena.source_start(opener_node) + @arena.source_len(opener_node) - strength
+            @arena.update_span(opener_node, @arena.source_start(opener_node), new_end)
+          end
+
+          if closer[:count] == strength
+            @provisional_nodes.delete(closer_node)
+            @arena.detach(closer_node)
+            stack.delete_at(closer_idx)
+          else
+            closer[:count] -= strength
+            str = @arena.str1(closer_node)
+            @arena.replace_str1(closer_node, str[strength..])
+            new_start = @arena.source_start(closer_node) + strength
+            new_end = @arena.source_start(closer_node) + @arena.source_len(closer_node)
+            @arena.update_span(closer_node, new_start, new_end)
+          end
+        end
+
+        # Anything left on the stack is unmatched; release its provisional
+        # marker so its text remains as plain content in the arena.
+        stack.each { |e| @provisional_nodes.delete(e[:node_id]) }
+        stack.clear
       end
 
       def append_text(start_byte, end_byte, literal)
         last = @arena.last_child(@parent_id)
         if last != -1 && @arena.type(last) == NodeType::TEXT &&
-           adjacent?(last, start_byte) && !bracket_node?(last)
+           adjacent?(last, start_byte) && !@provisional_nodes[last]
           merge_text(last, literal, start_byte, end_byte)
           return
         end
@@ -340,14 +490,6 @@ module Markdast
           str1: literal
         )
         @arena.append_child(@parent_id, node)
-      end
-
-      # Provisional `[` / `![` TEXT nodes still living on the bracket stack
-      # must not be merged with neighboring text, otherwise the link label
-      # would be absorbed into the opener and lost when finalize_link
-      # detaches the opener node.
-      def bracket_node?(node_id)
-        @bracket_stack.any? { |b| b[:node_id] == node_id }
       end
 
       # Two TEXT nodes can be merged when the previous one is adjacent in
