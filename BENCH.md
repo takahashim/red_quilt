@@ -1,5 +1,51 @@
 # Markdast Performance Benchmarks
 
+## v1.2.0 Inline pipeline redesign (2026-05-26, Ruby 4.0.5)
+
+**Environment**: Ruby 4.0.5, Apple Silicon (M-series)
+
+**Methodology**: `benchmark-ips` (5s warmup + measurement), `Markdast.parse()`
+
+**Pipeline changes since v1.1.0**:
+- InlineParser / InlineScanner replaced by a two-stage Inline::Lexer +
+  Inline::Builder pipeline (see `inline-redesign.md`)
+- Builder implements CommonMark spec 6.2 delimiter stack (Phase 9-B)
+- Substring chain and base_offset arithmetic eliminated
+- delimiter_stack / bracket_stack entries are small attr_accessor classes
+  (Ruby 4.0+ attr access is faster than Symbol-keyed Hash lookup)
+
+### Results
+
+```
+Fixture                      i/s      Time/iter   vs. short_paragraph
+──────────────────────────────────────────────────────────────────────
+short_paragraph         ~25,200      40 μs      1.0x (baseline)
+many_links               ~1,320     760 μs     19.1x slower
+long_paragraph           ~1,130     880 μs     22.3x slower
+nested_emphasis            ~905    1.10 ms     27.9x slower
+mixed_markup               ~885    1.13 ms     28.5x slower
+deep_nesting               ~690    1.45 ms     36.7x slower
+```
+
+### v1.0.0 → v1.1.0 → v1.2.0 Speedup
+
+| Fixture | v1.0.0 | v1.1.0 | v1.2.0 (Ruby 4.0.5) | Total speedup |
+|---------|--------|--------|---------------------|---------------|
+| short_paragraph | 6,586 | 10,391 | ~25,200 | **3.8x** |
+| many_links | 515 | 532 | ~1,320 | **2.6x** |
+| mixed_markup | 134 | 342 | ~885 | **6.6x** |
+| nested_emphasis | 89 | 390 | ~905 | **10.2x** |
+| deep_nesting | 69 | 222 | ~690 | **10.0x** |
+| long_paragraph | 37 | 550 | ~1,130 | **30.5x** ✨ |
+
+Notes:
+- v1.0 → v1.1: pure-algorithmic + scanner improvements on Ruby 3.4.
+- v1.1 → v1.2: redesigned inline pipeline (substring-free, single-instance
+  Lexer / Builder, CommonMark spec 6.2 delimiter stack) plus the
+  Ruby 4.0 attr_accessor performance lift.
+
+---
+
 ## v1.1.0 Optimized (2026-05-26)
 
 **Environment**: Ruby 3.4.1, Apple Silicon
