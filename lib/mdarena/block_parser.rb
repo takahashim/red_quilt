@@ -1086,7 +1086,11 @@ module Mdarena
     end
 
     def normalize_reference_label(label)
-      label.to_s.strip.downcase.gsub(/[ \t\r\n]+/, " ")
+      # CommonMark spec: full Unicode case fold (`downcase(:fold)`),
+      # not the default per-codepoint lowercase. This makes labels like
+      # `ẞ` (U+1E9E) match a definition of `SS` because the case-fold
+      # of `ẞ` is `ss`.
+      label.to_s.strip.downcase(:fold).gsub(/[ \t\r\n]+/, " ")
     end
 
     def strip_angle_brackets(destination)

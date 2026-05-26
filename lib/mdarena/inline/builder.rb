@@ -730,7 +730,9 @@ end
       end
 
       def normalize_reference_label(label)
-        label.to_s.strip.downcase.gsub(/[ \t\r\n]+/, " ")
+        # CommonMark spec: full Unicode case fold so labels like `ẞ`
+        # match definitions of `SS` (the case-fold of `ẞ` is `ss`).
+        label.to_s.strip.downcase(:fold).gsub(/[ \t\r\n]+/, " ")
       end
 
       # --------------------------- delim runs / emphasis ------------------

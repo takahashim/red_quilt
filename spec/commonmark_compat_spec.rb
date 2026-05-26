@@ -864,6 +864,7 @@ RSpec.describe "CommonMark compatibility" do
     { number: 7, section: "Tabs", markdown: "-\t\tfoo\n", html: "<ul>\n<li>\n<pre><code>  foo\n</code></pre>\n</li>\n</ul>\n" },
     { number: 8, section: "Tabs", markdown: "    foo\n\tbar\n", html: "<pre><code>foo\nbar\n</code></pre>\n" },
     { number: 9, section: "Tabs", markdown: " - foo\n   - bar\n\t - baz\n", html: "<ul>\n<li>foo\n<ul>\n<li>bar\n<ul>\n<li>baz</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>\n" },
+    { number: 540, section: "Links", markdown: "[ẞ]\n\n[SS]: /url\n", html: "<p><a href=\"/url\">ẞ</a></p>\n" },
   ].freeze
 
   KNOWN_GAPS = [].freeze
