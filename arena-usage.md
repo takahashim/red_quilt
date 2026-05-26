@@ -336,5 +336,4 @@ arena.update_span(text_id, 0, 12)
 
 ## 8. 関連ドキュメント
 
-- `ast-spec.md` — Mdarena 全体の AST 設計方針。Arena が「parallel array で持つ」とした背景はこちらに記載
-- `inline-redesign.md` — Inline pipeline (Lexer + Builder) の設計。Arena に対する操作パターンの具体例として参考になる
+- `ast-spec.md` — Mdarena 全体の AST 設計方針。Arena が「parallel array で持つ」とした背景、NodeRef / Document / Renderer の役割分担、実装フェーズの進捗はこちら
