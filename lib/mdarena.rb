@@ -17,6 +17,7 @@ require_relative "mdarena/inline/builder"
 require_relative "mdarena/inline_pass"
 require_relative "mdarena/extended_autolink_pass"
 require_relative "mdarena/renderer/html"
+require_relative "mdarena/renderer/mdast"
 
 module Mdarena
   class Error < StandardError; end
