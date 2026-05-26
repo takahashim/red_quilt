@@ -190,6 +190,48 @@ RSpec.describe "CommonMark compatibility" do
       section: "HTML blocks",
       markdown: "<!-- foo -->\n\n    <!-- foo -->\n",
       html: "<!-- foo -->\n<pre><code>&lt;!-- foo --&gt;\n</code></pre>\n"
+    },
+    {
+      number: 192,
+      section: "Link reference definitions",
+      markdown: "[foo]: /url \"title\"\n\n[foo]\n",
+      html: "<p><a href=\"/url\" title=\"title\">foo</a></p>\n"
+    },
+    {
+      number: 206,
+      section: "Link reference definitions",
+      markdown: "[foo]\n\n[foo]: /url\n[foo]: /url2\n",
+      html: "<p><a href=\"/url\">foo</a></p>\n"
+    },
+    {
+      number: 207,
+      section: "Link reference definitions",
+      markdown: "[FOO]:\n   /url\n\n[Foo]\n",
+      html: "<p><a href=\"/url\">Foo</a></p>\n"
+    },
+    {
+      number: 209,
+      section: "Link reference definitions",
+      markdown: "[foo][]\n\n[foo]: /url \"title\"\n",
+      html: "<p><a href=\"/url\" title=\"title\">foo</a></p>\n"
+    },
+    {
+      number: 545,
+      section: "Reference links",
+      markdown: "[foo *bar*]\n\n[foo *bar*]: /url\n",
+      html: "<p><a href=\"/url\">foo <em>bar</em></a></p>\n"
+    },
+    {
+      number: 571,
+      section: "Images",
+      markdown: "![foo](/url \"title\")\n",
+      html: "<p><img src=\"/url\" alt=\"foo\" title=\"title\" /></p>\n"
+    },
+    {
+      number: 589,
+      section: "Reference images",
+      markdown: "![foo]\n\n[foo]: /url \"title\"\n",
+      html: "<p><img src=\"/url\" alt=\"foo\" title=\"title\" /></p>\n"
     }
   ].freeze
 
