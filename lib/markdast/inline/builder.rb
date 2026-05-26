@@ -509,6 +509,22 @@ module Markdast
           strength = [opener.count, closer.count].min >= 2 ? 2 : 1
           kind = strength == 2 ? NodeType::STRONG : NodeType::EMPHASIS
 
+          # CommonMark spec: any delimiters strictly between this opener and
+          # closer can't open or close anything in this scope, so drop them
+          # from the stack before we rebuild the tree. Their arena nodes
+          # stay where they are (they'll be reparented into the new emphasis
+          # alongside the surrounding content), but they must no longer be
+          # candidates for future iterations. Without this, the next
+          # iteration would try to pair stranded delimiters that have
+          # already been moved into a different parent, which corrupts the
+          # sibling chain (Arena#reparent walks into @parent[-1]).
+          if closer_idx > opener_idx + 1
+            removed = stack.slice!((opener_idx + 1)...closer_idx)
+            removed.each { |e| @provisional_nodes.delete(e.node_id) }
+            closer_idx = opener_idx + 1
+            closer = stack[closer_idx]
+          end
+
           opener_node = opener.node_id
           closer_node = closer.node_id
 
