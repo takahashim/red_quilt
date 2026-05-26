@@ -96,6 +96,12 @@ RSpec.describe "CommonMark compatibility" do
       html: "<p><a href=\"/url\" title=\"\ntitle\nline1\nline2\n\">foo</a></p>\n"
     },
     {
+      number: 213,
+      section: "Link reference definitions",
+      markdown: "Foo\n[bar]: /baz\n\n[bar]\n",
+      html: "<p>Foo\n[bar]: /baz</p>\n<p>[bar]</p>\n"
+    },
+    {
       number: 217,
       section: "Link reference definitions",
       markdown: "[foo]: /foo-url \"foo\"\n[bar]: /bar-url\n  \"bar\"\n[baz]: /baz-url\n\n[foo],\n[bar],\n[baz]\n",
