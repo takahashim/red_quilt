@@ -1064,16 +1064,46 @@ module Mdarena
       HTML_TYPE_7_OPEN_TAG_RE.match?(text) || HTML_TYPE_7_CLOSING_TAG_RE.match?(text)
     end
 
+    # A reference label may contain `\[` / `\]` (backslash-escaped),
+    # but never an unescaped `[` or `]`. Newlines inside the label are
+    # allowed and collapsed by normalize_reference_label.
+    REF_DEF_RE = /\A {0,3}\[((?:[^\\\[\]]|\\.)+)\]:(.*)\z/m.freeze
+
     def link_reference_definition(lines, index)
       text = lines[index].content
-      # A reference label may contain `\[` / `\]` (backslash-escaped),
-      # but never an unescaped `[` or `]`.
-      match = /\A {0,3}\[((?:[^\\\[\]]|\\.)+)\]:(.*)\z/.match(text)
-      return unless match
+      return unless text.match?(/\A {0,3}\[/)
 
-      label = normalize_reference_label(match[1])
-      remainder = match[2].to_s
-      consumed = 1
+      # Fast path: complete `[label]:` on a single line.
+      match = REF_DEF_RE.match(text)
+      if match
+        consumed = 1
+        label = normalize_reference_label(match[1])
+        return if label.empty?
+        remainder = match[2].to_s
+      else
+        # Multi-line label: accumulate subsequent lines until `]:` is
+        # found. Blank lines terminate the attempt.
+        accumulated = text
+        extra = 0
+        loop do
+          probe = index + 1 + extra
+          break if probe >= lines.length
+          next_line = lines[probe]
+          break if next_line.blank
+          accumulated += "\n" + next_line.content
+          extra += 1
+          m = REF_DEF_RE.match(accumulated)
+          if m
+            match = m
+            break
+          end
+        end
+        return unless match
+        consumed = 1 + extra
+        label = normalize_reference_label(match[1])
+        return if label.empty?
+        remainder = match[2].to_s
+      end
 
       chunks = [remainder]
       if remainder.strip.empty?
