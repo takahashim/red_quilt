@@ -24,44 +24,44 @@ module Markdast
       until @scanner.eof?
         break if terminator && @scanner.peek(terminator.length) == terminator
 
-        start_index = @scanner.index
+        start_byte = @scanner.byte_index
         if @scanner.peek == "\n"
-          parse_line_break(parent_id, start_index)
+          parse_line_break(parent_id, start_byte)
         elsif @scanner.peek == "\\" && @scanner.peek(2) == "\\\n"
           @scanner.advance(2)
-          @arena.append_child(parent_id, @arena.add_node(NodeType::HARDBREAK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: "\n"))
+          @arena.append_child(parent_id, @arena.add_node(NodeType::HARDBREAK, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: "\n"))
         elsif triple_delimiter_open?
-          parse_triple_emphasis(parent_id, @scanner.advance(3), start_index)
+          parse_triple_emphasis(parent_id, @scanner.advance(3), start_byte)
         elsif @scanner.peek == "`"
-          parse_code_span(parent_id, start_index)
+          parse_code_span(parent_id, start_byte)
         elsif @scanner.peek(2) == "**" || @scanner.peek(2) == "__"
-          parse_emphasis(parent_id, @scanner.advance(2), NodeType::STRONG, start_index)
+          parse_emphasis(parent_id, @scanner.advance(2), NodeType::STRONG, start_byte)
         elsif @scanner.peek == "*" || emphasis_underscore_open?
-          parse_emphasis(parent_id, @scanner.advance(1), NodeType::EMPHASIS, start_index)
+          parse_emphasis(parent_id, @scanner.advance(1), NodeType::EMPHASIS, start_byte)
         elsif @scanner.peek == "!" && @scanner.peek(2) == "!["
-          parse_image(parent_id, start_index)
+          parse_image(parent_id, start_byte)
         elsif @scanner.peek == "["
-          parse_link(parent_id, start_index)
+          parse_link(parent_id, start_byte)
         elsif @scanner.peek == "<"
-          parse_html_inline(parent_id, start_index)
+          parse_html_inline(parent_id, start_byte)
         elsif @scanner.peek == "&"
-          parse_entity(parent_id, start_index)
+          parse_entity(parent_id, start_byte)
         else
           text = @scanner.scan_text
           text = @scanner.advance(1) if text.empty?
-          append_text(parent_id, text, start_index: start_index, end_index: @scanner.index, literal: false)
+          append_text(parent_id, text, start_byte: start_byte, end_byte: @scanner.byte_index, literal: false)
         end
       end
       @scanner.advance(terminator.length) if terminator && @scanner.peek(terminator.length) == terminator
     end
 
-    def parse_line_break(parent_id, start_index)
+    def parse_line_break(parent_id, start_byte)
       @scanner.advance(1)
       break_type = trim_trailing_spaces_for_hardbreak(parent_id) ? NodeType::HARDBREAK : NodeType::SOFTBREAK
-      @arena.append_child(parent_id, @arena.add_node(break_type, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: "\n"))
+      @arena.append_child(parent_id, @arena.add_node(break_type, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: "\n"))
     end
 
-    def parse_code_span(parent_id, start_index)
+    def parse_code_span(parent_id, start_byte)
       delimiter = consume_backtick_run
       content_start = @scanner.index
 
@@ -73,7 +73,7 @@ module Markdast
             raw_content = @scanner.text_slice(content_start, run_start)
             @arena.append_child(
               parent_id,
-              @arena.add_node(NodeType::CODE_SPAN, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: normalize_code_span(raw_content))
+              @arena.add_node(NodeType::CODE_SPAN, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: normalize_code_span(raw_content))
             )
             return
           end
@@ -82,66 +82,66 @@ module Markdast
         end
       end
 
-      append_text(parent_id, delimiter, start_index: start_index, end_index: start_index + delimiter.length, literal: true)
+      append_text(parent_id, delimiter, start_byte: start_byte, end_byte: start_byte + delimiter.bytesize, literal: true)
     end
 
-    def parse_emphasis(parent_id, delimiter, type, start_index)
+    def parse_emphasis(parent_id, delimiter, type, start_byte)
       closing = find_emphasis_closing(delimiter, type)
-      return append_text(parent_id, delimiter, start_index: start_index, end_index: @scanner.index, literal: true) unless closing
+      return append_text(parent_id, delimiter, start_byte: start_byte, end_byte: @scanner.byte_index, literal: true) unless closing
 
       content = @scanner.advance(closing)
       @scanner.advance(delimiter.length)
-      node_id = @arena.add_node(type, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index))
+      node_id = @arena.add_node(type, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index))
       @arena.append_child(parent_id, node_id)
-      child_offset = @base_offset ? @base_offset + start_index + delimiter.length : nil
+      child_offset = @base_offset ? @base_offset + start_byte + delimiter.bytesize : nil
       self.class.new(@arena, parent_id: node_id, source_text: content, base_offset: child_offset, references: @references).parse
     end
 
-    def parse_triple_emphasis(parent_id, delimiter, start_index)
+    def parse_triple_emphasis(parent_id, delimiter, start_byte)
       closing = @scanner.rindex_from(delimiter)
-      return append_text(parent_id, delimiter, start_index: start_index, end_index: @scanner.index, literal: true) unless closing
+      return append_text(parent_id, delimiter, start_byte: start_byte, end_byte: @scanner.byte_index, literal: true) unless closing
 
       content = @scanner.advance(closing)
       @scanner.advance(delimiter.length)
 
-      emphasis_id = @arena.add_node(NodeType::EMPHASIS, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index))
+      emphasis_id = @arena.add_node(NodeType::EMPHASIS, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index))
       @arena.append_child(parent_id, emphasis_id)
 
       strong_id = @arena.add_node(NodeType::STRONG)
       @arena.append_child(emphasis_id, strong_id)
 
-      child_offset = @base_offset ? @base_offset + start_index + delimiter.length : nil
+      child_offset = @base_offset ? @base_offset + start_byte + delimiter.bytesize : nil
       self.class.new(@arena, parent_id: strong_id, source_text: content, base_offset: child_offset, references: @references).parse
     end
 
-    def parse_link(parent_id, start_index)
+    def parse_link(parent_id, start_byte)
       parts = extract_link_like(@scanner.remaining, image: false)
       parts ||= extract_reference_like(@scanner.remaining, image: false)
-      return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless parts
+      return append_text(parent_id, @scanner.advance(1), start_byte: start_byte, end_byte: @scanner.byte_index, literal: true) unless parts
 
       @scanner.advance(parts[:raw].length)
-      node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
+      node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
       @arena.append_child(parent_id, node_id)
-      child_offset = @base_offset ? @base_offset + start_index + (parts[:raw].start_with?("![") ? 2 : 1) : nil
+      child_offset = @base_offset ? @base_offset + start_byte + (parts[:raw].start_with?("![") ? 2 : 1) : nil
       self.class.new(@arena, parent_id: node_id, source_text: parts[:label], base_offset: child_offset, references: @references).parse
     end
 
-    def parse_image(parent_id, start_index)
+    def parse_image(parent_id, start_byte)
       parts = extract_link_like(@scanner.remaining, image: true)
       parts ||= extract_reference_like(@scanner.remaining, image: true)
-      return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless parts
+      return append_text(parent_id, @scanner.advance(1), start_byte: start_byte, end_byte: @scanner.byte_index, literal: true) unless parts
 
       @scanner.advance(parts[:raw].length)
-      node_id = @arena.add_node(NodeType::IMAGE, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
+      node_id = @arena.add_node(NodeType::IMAGE, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: sanitize_destination(parts[:destination]), str2: parts[:title])
       @arena.append_child(parent_id, node_id)
-      child_offset = @base_offset ? @base_offset + start_index + 2 : nil
+      child_offset = @base_offset ? @base_offset + start_byte + 2 : nil
       self.class.new(@arena, parent_id: node_id, source_text: parts[:label], base_offset: child_offset, references: @references).parse
     end
 
-    def parse_html_inline(parent_id, start_index)
+    def parse_html_inline(parent_id, start_byte)
       if (autolink = uri_autolink)
         @scanner.advance(autolink[:raw].length)
-        node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: autolink[:destination])
+        node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: autolink[:destination])
         @arena.append_child(parent_id, node_id)
         @arena.append_child(node_id, @arena.add_node(NodeType::TEXT, str1: autolink[:label]))
         return
@@ -149,42 +149,42 @@ module Markdast
 
       if (autolink = email_autolink)
         @scanner.advance(autolink[:raw].length)
-        node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: "mailto:#{autolink[:email]}")
+        node_id = @arena.add_node(NodeType::LINK, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: "mailto:#{autolink[:email]}")
         @arena.append_child(parent_id, node_id)
         @arena.append_child(node_id, @arena.add_node(NodeType::TEXT, str1: autolink[:email]))
         return
       end
 
       match = html_tag_match
-      return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless match
+      return append_text(parent_id, @scanner.advance(1), start_byte: start_byte, end_byte: @scanner.byte_index, literal: true) unless match
 
       @scanner.advance(match[0].length)
-      @arena.append_child(parent_id, @arena.add_node(NodeType::HTML_INLINE, source_start: src_start(start_index), source_len: src_len(start_index, @scanner.index), str1: match[0]))
+      @arena.append_child(parent_id, @arena.add_node(NodeType::HTML_INLINE, source_start: src_start(start_byte), source_len: src_len(start_byte, @scanner.byte_index), str1: match[0]))
     end
 
     ENTITY_RE = /\G&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/.freeze
 
-    def parse_entity(parent_id, start_index)
+    def parse_entity(parent_id, start_byte)
       match = @scanner.match_at(ENTITY_RE)
-      return append_text(parent_id, @scanner.advance(1), start_index: start_index, end_index: @scanner.index, literal: true) unless match
+      return append_text(parent_id, @scanner.advance(1), start_byte: start_byte, end_byte: @scanner.byte_index, literal: true) unless match
 
       @scanner.advance(match[0].length)
-      append_text(parent_id, CGI.unescapeHTML(match[0]), start_index: start_index, end_index: @scanner.index, literal: true)
+      append_text(parent_id, CGI.unescapeHTML(match[0]), start_byte: start_byte, end_byte: @scanner.byte_index, literal: true)
     end
 
-    def append_text(parent_id, text, start_index:, end_index:, literal:)
+    def append_text(parent_id, text, start_byte:, end_byte:, literal:)
       return if text.nil? || text.empty?
 
       last_child = @arena.last_child(parent_id)
       if mergeable_text?(last_child, literal)
         merged = @arena.str1(last_child) + text
         @arena.replace_str1(last_child, merged)
-        @arena.update_span(last_child, @arena.source_start(last_child), source_end(end_index)) if @base_offset
+        @arena.update_span(last_child, @arena.source_start(last_child), source_end(end_byte)) if @base_offset
       else
         node = if literal || @base_offset.nil?
-                 @arena.add_node(NodeType::TEXT, source_start: src_start(start_index), source_len: src_len(start_index, end_index), str1: text)
+                 @arena.add_node(NodeType::TEXT, source_start: src_start(start_byte), source_len: src_len(start_byte, end_byte), str1: text)
                else
-                 @arena.add_node(NodeType::TEXT, source_start: src_start(start_index), source_len: src_len(start_index, end_index))
+                 @arena.add_node(NodeType::TEXT, source_start: src_start(start_byte), source_len: src_len(start_byte, end_byte))
                end
         @arena.append_child(parent_id, node)
       end
@@ -377,16 +377,16 @@ module Markdast
       normalized
     end
 
-    def src_start(start_index)
-      @base_offset ? @base_offset + start_index : -1
+    def src_start(start_byte)
+      @base_offset ? @base_offset + start_byte : -1
     end
 
-    def src_len(start_index, end_index)
-      @base_offset ? end_index - start_index : 0
+    def src_len(start_byte, end_byte)
+      @base_offset ? end_byte - start_byte : 0
     end
 
-    def source_end(end_index)
-      @base_offset + end_index
+    def source_end(end_byte)
+      @base_offset + end_byte
     end
 
     def mergeable_text?(last_child, literal)

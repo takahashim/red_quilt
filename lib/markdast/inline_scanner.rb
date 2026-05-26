@@ -7,9 +7,10 @@ module Markdast
     def initialize(text)
       @text = text
       @index = 0
+      @byte_index = 0
     end
 
-    attr_reader :index, :text
+    attr_reader :index, :text, :byte_index
 
     def eof?
       @index >= @text.length
@@ -22,6 +23,7 @@ module Markdast
     def advance(count = 1)
       chunk = @text[@index, count]
       @index += count
+      @byte_index += chunk.bytesize
       chunk
     end
 
@@ -29,6 +31,7 @@ module Markdast
       rest = @text.index(SPECIAL_RE, @index) || @text.length
       chunk = @text[@index...rest]
       @index = rest
+      @byte_index += chunk.bytesize
       chunk
     end
 
