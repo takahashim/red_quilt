@@ -188,6 +188,10 @@ module Mdarena
           strip_trailing_spaces(trailing_spaces) if trailing_spaces.positive?
           kind = NodeType::HARDBREAK
         else
+          # Soft line break: spec also strips trailing spaces from the
+          # previous line so a single trailing space doesn't survive into
+          # the output.
+          strip_trailing_spaces(trailing_spaces) if trailing_spaces.positive?
           kind = NodeType::SOFTBREAK
         end
 

@@ -8,7 +8,10 @@ module Mdarena
     # All input positions are byte offsets into the document source.
     module Flanking
       UNICODE_WHITESPACE_RE = /\A[\s   -   　]\z/.freeze
-      UNICODE_PUNCT_RE = /\A[[:punct:]]\z/.freeze
+      # CommonMark 0.31.2 expanded the definition of "punctuation" for
+      # flanking purposes to also include Unicode S (symbol) category, so
+      # currency / math / other symbols form delimiter-run boundaries.
+      UNICODE_PUNCT_RE = /\A[\p{P}\p{S}]\z/.freeze
 
       module_function
 

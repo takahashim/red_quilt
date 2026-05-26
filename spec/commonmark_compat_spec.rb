@@ -803,6 +803,15 @@ RSpec.describe "CommonMark compatibility" do
     { number: 509, section: "Links", markdown: "[link](/url 'title \"and\" title')\n", html: "<p><a href=\"/url\" title=\"title &quot;and&quot; title\">link</a></p>\n" },
     { number: 510, section: "Links", markdown: "[link](   /uri\n  \"title\"  )\n", html: "<p><a href=\"/uri\" title=\"title\">link</a></p>\n" },
     { number: 568, section: "Links", markdown: "[foo](not a link)\n\n[foo]: /url1\n", html: "<p><a href=\"/url1\">foo</a>(not a link)</p>\n" },
+    { number: 23, section: "Backslash escapes", markdown: "[foo]\n\n[foo]: /bar\\* \"ti\\*tle\"\n", html: "<p><a href=\"/bar*\" title=\"ti*tle\">foo</a></p>\n" },
+    { number: 24, section: "Backslash escapes", markdown: "``` foo\\+bar\nfoo\n```\n", html: "<pre><code class=\"language-foo+bar\">foo\n</code></pre>\n" },
+    { number: 79, section: "ATX headings", markdown: "## \n#\n### ###\n", html: "<h2></h2>\n<h1></h1>\n<h3></h3>\n" },
+    { number: 112, section: "Indented code blocks", markdown: "    chunk1\n      \n      chunk2\n", html: "<pre><code>chunk1\n  \n  chunk2\n</code></pre>\n" },
+    { number: 117, section: "Indented code blocks", markdown: "\n    \n    foo\n    \n\n", html: "<pre><code>foo\n</code></pre>\n" },
+    { number: 354, section: "Emphasis and strong emphasis", markdown: "*$*alpha.\n\n*£*bravo.\n\n*€*charlie.\n", html: "<p>*$*alpha.</p>\n<p>*£*bravo.</p>\n<p>*€*charlie.</p>\n" },
+    { number: 556, section: "Links", markdown: "[foo] \n[]\n\n[foo]: /url \"title\"\n", html: "<p><a href=\"/url\" title=\"title\">foo</a>\n[]</p>\n" },
+    { number: 587, section: "Images", markdown: "![foo] \n[]\n\n[foo]: /url \"title\"\n", html: "<p><img src=\"/url\" alt=\"foo\" title=\"title\" />\n[]</p>\n" },
+    { number: 649, section: "Soft line breaks", markdown: "foo \n baz\n", html: "<p>foo\nbaz</p>\n" },
   ].freeze
 
   KNOWN_GAPS = [

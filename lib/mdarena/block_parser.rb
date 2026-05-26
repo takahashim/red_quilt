@@ -307,19 +307,28 @@ module Mdarena
     end
 
     def parse_indented_code(parent_id, lines, index, transformed)
+      start_index = index
       code_lines = []
       while index < lines.length
         line = lines[index]
         break unless line.blank || indented_code_line?(line.content)
 
-        code_lines << (line.blank ? "" : line.content.sub(/\A {4}/, ""))
+        # CommonMark: strip up to 4 leading spaces from every line,
+        # including blank lines whose content beyond column 4 must be
+        # preserved verbatim.
+        code_lines << line.content.sub(/\A {1,4}/, "")
         index += 1
       end
 
-      start_byte = lines[index - code_lines.length].start_byte
+      # Trailing blank lines are not part of the code block.
+      while !code_lines.empty? && code_lines.last.strip.empty?
+        code_lines.pop
+        index -= 1
+      end
+
+      start_byte = lines[start_index].start_byte
       end_byte = lines[index - 1].end_byte
-      code = code_lines.join("\n")
-      code << "\n" unless code_lines.empty? || lines[index - 1].blank
+      code = code_lines.empty? ? "" : code_lines.join("\n") + "\n"
 
       code_id = @arena.add_node(NodeType::CODE_BLOCK,
                                 source_start: start_byte,
@@ -566,7 +575,7 @@ module Mdarena
     #   followed by the content
     # - optional trailing `#`s are only stripped when separated from the
     #   content by whitespace (so `# foo#` keeps the `#`)
-    ATX_HEADING_RE = /\A {0,3}(\#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+\#+)?[ \t]*\z/.freeze
+    ATX_HEADING_RE = /\A {0,3}(\#{1,6})(?:[ \t]+\#+[ \t]*|[ \t]+(.*?)(?:[ \t]+\#+)?[ \t]*|[ \t]*)\z/.freeze
 
     def atx_heading(text)
       match = ATX_HEADING_RE.match(text)
@@ -705,7 +714,7 @@ module Mdarena
       {
         char: match[2][0],
         count: match[2].length,
-        info: info,
+        info: unescape_reference_text(info),
         indent: match[1].length
       }
     end
@@ -826,7 +835,7 @@ module Mdarena
       {
         reference: {
           label: label,
-          destination: strip_angle_brackets(destination),
+          destination: unescape_reference_text(strip_angle_brackets(destination)),
           title: title
         },
         consumed: consumed
@@ -917,7 +926,7 @@ module Mdarena
     end
 
     def unescape_reference_text(text)
-      text.gsub(/\\(.)/, "\\1")
+      text.gsub(/\\([!-\/:-@\[-`{-~])/, "\\1")
     end
 
     def store_reference(reference)
