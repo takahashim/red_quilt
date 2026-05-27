@@ -180,10 +180,10 @@ module RedQuilt
           end
           existing = last_lit || @arena.text(last_id).to_s
           incoming = materialized || @source.byteslice(start_byte, end_byte - start_byte).to_s
-          @arena.replace_str1(last_id, existing + incoming)
+          @arena.update_str1(last_id, existing + incoming)
           update_arena_span(last_id, @arena.source_start(last_id), end_byte)
         else
-          @arena.replace_str1(last_id, @arena.str1(last_id) + materialized.to_s)
+          @arena.update_str1(last_id, @arena.str1(last_id) + materialized.to_s)
         end
       end
 
@@ -217,7 +217,7 @@ module RedQuilt
         lit = @arena.str1(last)
         if lit
           new_lit = lit.sub(/ {#{count},}\z/, "")
-          @arena.replace_str1(last, new_lit)
+          @arena.update_str1(last, new_lit)
         end
 
         return unless @track_source
@@ -885,7 +885,7 @@ module RedQuilt
           else
             opener.count -= strength
             str = @arena.str1(opener_node)
-            @arena.replace_str1(opener_node, str[0...-strength])
+            @arena.update_str1(opener_node, str[0...-strength])
             if @track_source
               new_end = @arena.source_start(opener_node) + @arena.source_len(opener_node) - strength
               @arena.update_span(opener_node, @arena.source_start(opener_node), new_end)
@@ -899,7 +899,7 @@ module RedQuilt
           else
             closer.count -= strength
             str = @arena.str1(closer_node)
-            @arena.replace_str1(closer_node, str[strength..])
+            @arena.update_str1(closer_node, str[strength..])
             if @track_source
               new_start = @arena.source_start(closer_node) + strength
               new_end = @arena.source_start(closer_node) + @arena.source_len(closer_node)

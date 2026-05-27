@@ -200,7 +200,7 @@ module RedQuilt
         end
 
         @arena.update_span(list_id, start_byte, end_byte)
-        @arena.replace_int3(list_id, loose ? 0 : 1)
+        @arena.update_int3(list_id, loose ? 0 : 1)
         index
       end
 

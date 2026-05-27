@@ -274,11 +274,11 @@ module RedQuilt
       end
     end
 
-    def replace_str1(id, value)
+    def update_str1(id, value)
       @str1[id] = value
     end
 
-    def replace_int3(id, value)
+    def update_int3(id, value)
       @int3[id] = value
     end
 
