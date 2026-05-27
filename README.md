@@ -153,28 +153,28 @@ All CommonMark v0.31.2 specification test cases pass without exception.
 
 ## Command-line Tool
 
-RedQuilt ships with a `red_quilt` CLI for converting Markdown files to HTML or inspecting the AST.
+RedQuilt ships with a `redquilt` CLI for converting Markdown files to HTML or inspecting the AST.
 
 ### Basic usage
 
 ```bash
 # Convert Markdown file to HTML
-red_quilt input.md > output.html
+redquilt input.md > output.html
 
 # Convert from stdin
-echo "# Hello" | red_quilt
+echo "# Hello" | redquilt
 
 # Output as AST (for debugging)
-red_quilt --format ast input.md
+redquilt --format ast input.md
 
 # Output as MDAST-compatible JSON (for external tools)
-red_quilt --format json input.md
+redquilt --format json input.md
 
 # Standalone HTML document with title
-red_quilt --standalone --title "My Document" input.md
+redquilt --standalone --title "My Document" input.md
 
 # Enable GFM extended autolinks
-red_quilt --extended-autolinks input.md
+redquilt --extended-autolinks input.md
 ```
 
 ### Options

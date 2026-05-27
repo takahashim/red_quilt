@@ -3,7 +3,7 @@
 require "optparse"
 
 module RedQuilt
-  # Entry point for the `red_quilt` executable. Defined as a module-level
+  # Entry point for the `redquilt` executable. Defined as a module-level
   # function so tests can drive it without shelling out.
   #
   # CLI.run takes an argv-style array and an optional set of IO objects
@@ -11,7 +11,7 @@ module RedQuilt
   # exit code: 0 on success, 1 on usage errors.
   module CLI
     USAGE = <<~USAGE
-      Usage: red_quilt [options] [file]
+      Usage: redquilt [options] [file]
 
       Reads Markdown from FILE (or stdin if FILE is omitted) and writes the
       result to stdout.
@@ -118,7 +118,7 @@ module RedQuilt
           return 0
         end
         opts.on("-v", "--version", "Show version") do
-          stderr.puts "red_quilt #{RedQuilt::VERSION}"
+          stderr.puts "redquilt #{RedQuilt::VERSION}"
           return 0
         end
       end
@@ -126,7 +126,7 @@ module RedQuilt
       begin
         parser.parse!(argv)
       rescue OptionParser::ParseError => e
-        stderr.puts "red_quilt: #{e.message}"
+        stderr.puts "redquilt: #{e.message}"
         stderr.puts parser
         return 1
       end
@@ -140,12 +140,12 @@ module RedQuilt
       elsif argv.size == 1
         path = argv.first
         unless File.file?(path)
-          stderr.puts "red_quilt: no such file: #{path}"
+          stderr.puts "redquilt: no such file: #{path}"
           return nil
         end
         File.read(path)
       else
-        stderr.puts "red_quilt: too many arguments: #{argv.inspect}"
+        stderr.puts "redquilt: too many arguments: #{argv.inspect}"
         nil
       end
     end
@@ -163,7 +163,7 @@ module RedQuilt
 
     def self.write_diagnostics(diagnostics, stderr)
       if diagnostics.empty?
-        stderr.puts "red_quilt: no diagnostics"
+        stderr.puts "redquilt: no diagnostics"
         return
       end
       diagnostics.each do |d|
