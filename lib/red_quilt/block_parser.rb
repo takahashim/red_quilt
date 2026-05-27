@@ -77,7 +77,7 @@ module RedQuilt
         end
 
         if (fence = fenced_code_start(content))
-          index = parse_fenced_code(parent_id, lines, index, fence, transformed)
+          index = parse_fenced_code(parent_id, lines, index, fence)
         elsif (heading = atx_heading(content))
           append_heading(parent_id, line, heading, transformed)
           index += 1
@@ -88,15 +88,15 @@ module RedQuilt
           store_reference(reference[:reference], reference[:source_span])
           index += reference[:consumed]
         elsif table_start?(lines, index)
-          index = parse_table(parent_id, lines, index, transformed)
+          index = parse_table(parent_id, lines, index)
         elsif html_block_start?(content)
-          index = parse_html_block(parent_id, lines, index, transformed)
+          index = parse_html_block(parent_id, lines, index)
         elsif Blockquote.match?(content)
           index = @blockquote_parser.parse(parent_id, lines, index)
         elsif List.match(content)
           index = @list_parser.parse(parent_id, lines, index)
         elsif indented_code_line?(content)
-          index = parse_indented_code(parent_id, lines, index, transformed)
+          index = parse_indented_code(parent_id, lines, index)
         else
           index = parse_paragraph(parent_id, lines, index, transformed)
         end
@@ -163,7 +163,7 @@ module RedQuilt
       false
     end
 
-    def parse_fenced_code(parent_id, lines, index, fence, transformed)
+    def parse_fenced_code(parent_id, lines, index, fence)
       start_line = lines[index]
       content_lines = []
       index += 1
@@ -194,7 +194,7 @@ module RedQuilt
       index
     end
 
-    def parse_indented_code(parent_id, lines, index, transformed)
+    def parse_indented_code(parent_id, lines, index)
       start_index = index
       code_lines = []
       while index < lines.length
@@ -233,7 +233,7 @@ module RedQuilt
       5 => "]]>"
     }.freeze
 
-    def parse_html_block(parent_id, lines, index, transformed)
+    def parse_html_block(parent_id, lines, index)
       start_index = index
       type = html_block_type(lines[index].content)
       end_index = locate_html_block_end(lines, index, type)
@@ -283,7 +283,7 @@ module RedQuilt
       match ? match[1].downcase : "script"
     end
 
-    def parse_table(parent_id, lines, index, transformed)
+    def parse_table(parent_id, lines, index)
       # Caller must have verified table_start?(lines, index), which validates
       # both the delimiter pattern and the header/separator column count match.
       start_index = index

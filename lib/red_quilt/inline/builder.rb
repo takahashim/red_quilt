@@ -344,7 +344,7 @@ module RedQuilt
           return nil
         end
 
-        finalize_link(opener, opener_index, rbracket_token_id, match)
+        finalize_link(opener, opener_index, match)
         next_token_after(match[:end_byte], search_from_id)
       end
 
@@ -678,7 +678,7 @@ module RedQuilt
         NIL_PAIR
       end
 
-      def finalize_link(opener, opener_index, rbracket_token_id, match)
+      def finalize_link(opener, opener_index, match)
         opener_start = @tokens.start_byte(opener.token_id)
         link_kind = opener.image ? NodeType::IMAGE : NodeType::LINK
         link_id = add_arena_node(
