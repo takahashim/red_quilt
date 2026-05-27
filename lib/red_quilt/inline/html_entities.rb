@@ -2131,5 +2131,50 @@ module RedQuilt
       "zwj" => "\xE2\x80\x8D".b.freeze,
       "zwnj" => "\xE2\x80\x8C".b.freeze,
     }.freeze
+
+    # CommonMark entity reference grammar (with spec-mandated digit caps):
+    #   - named:   &name;          one HTML5 named reference
+    #   - decimal: &#NNNNNNN;      1 to 7 decimal digits
+    #   - hex:     &#xHHHHHH;      1 to 6 hex digits
+    # The digit counts cover every Unicode code point (0x10FFFF fits in
+    # 7 decimal / 6 hex digits) -- longer sequences are not valid NCRs
+    # and must be treated as literal text.
+    ENTITY_RE = /&(?:[A-Za-z][A-Za-z0-9]+|\#[0-9]{1,7}|\#[xX][0-9A-Fa-f]{1,6});/
+
+    REPLACEMENT_CHARACTER = "\uFFFD"
+    MAX_UNICODE_CODEPOINT = 0x10FFFF
+    SURROGATE_RANGE = (0xD800..0xDFFF)
+    private_constant :MAX_UNICODE_CODEPOINT, :SURROGATE_RANGE
+
+    module_function
+
+    # Decode one `&...;` entity match. Returns the decoded string or the
+    # original `raw` when no decoding applies. Numeric references that
+    # would produce U+0000, a surrogate, or a value outside the Unicode
+    # range are replaced with U+FFFD per CommonMark spec 6.4.
+    def decode_entity(raw)
+      if raw.start_with?("&#")
+        body = raw[2..-2]
+        codepoint = if body.start_with?("x", "X")
+                      body[1..].to_i(16)
+                    else
+                      body.to_i(10)
+                    end
+        decode_numeric_codepoint(codepoint)
+      else
+        encoded = HTML_ENTITIES[raw[1..-2]]
+        return raw unless encoded
+
+        encoded.dup.force_encoding(Encoding::UTF_8)
+      end
+    end
+
+    def decode_numeric_codepoint(codepoint)
+      return REPLACEMENT_CHARACTER if codepoint.zero?
+      return REPLACEMENT_CHARACTER if codepoint > MAX_UNICODE_CODEPOINT
+      return REPLACEMENT_CHARACTER if SURROGATE_RANGE.cover?(codepoint)
+
+      codepoint.chr(Encoding::UTF_8)
+    end
   end
 end

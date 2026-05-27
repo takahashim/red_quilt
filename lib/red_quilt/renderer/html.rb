@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "cgi"
-
 module RedQuilt
   module Renderer
     class HTML

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "cgi"
-
 module RedQuilt
   module Inline
     # Consumes a token stream produced by Lexer and adds inline nodes
@@ -569,15 +567,7 @@ module RedQuilt
       end
 
 def decode_link_entities(raw)
-  raw.gsub(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/) do |m|
-    if m.start_with?("&#")
-      decoded = CGI.unescapeHTML(m)
-      decoded.tr("\u0000", "\uFFFD")
-    else
-      encoded = HTML_ENTITIES[m[1..-2]]
-      encoded ? encoded.dup.force_encoding(Encoding::UTF_8) : m
-    end
-  end
+  raw.gsub(Inline::ENTITY_RE) { |m| Inline.decode_entity(m) }
 end
 
       def byte_at(pos)

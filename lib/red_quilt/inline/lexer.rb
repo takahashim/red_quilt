@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "cgi"
 require "strscan"
 
 require_relative "html_entities"
@@ -50,7 +49,10 @@ module RedQuilt
       HTML_PROC_INST_RE = %r{<\?[\s\S]*?\?>}
       HTML_DECLARATION_RE = %r{<![A-Za-z][^>]*>}
       HTML_CDATA_RE = %r{<!\[CDATA\[[\s\S]*?\]\]>}
-      ENTITY_RE = /&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/
+      # Entity regex and decoder live on the enclosing Inline module so
+      # the same digit-count caps and U+FFFD replacement apply across
+      # the lexer, the inline builder, and the reference-definition
+      # parser. See lib/red_quilt/inline/html_entities.rb.
 
       def initialize(source)
         @source = source
@@ -242,7 +244,7 @@ module RedQuilt
 
       def scan_amp(tokens)
         start = @ss.pos
-        if (matched = scan_within_end(ENTITY_RE))
+        if (matched = scan_within_end(Inline::ENTITY_RE))
           tokens.emit(TokenKind::ENTITY,
                       start_byte: start, end_byte: @ss.pos,
                       str1: decode_entity(matched))
@@ -266,17 +268,11 @@ module RedQuilt
         matched
       end
 
-      # Decodes a single entity reference. CommonMark requires the full
-      # HTML5 named-entity set, plus the numeric forms. U+0000 is
-      # replaced with U+FFFD; unknown names fall through unchanged.
+      # Decodes a single entity reference using the shared Inline
+      # decoder, which enforces the spec's digit limits and U+FFFD
+      # replacement for U+0000 / surrogates / out-of-range codepoints.
       def decode_entity(raw)
-        if raw.start_with?("&#")
-          decoded = CGI.unescapeHTML(raw)
-          return decoded.tr("\u0000", "\uFFFD")
-        end
-        encoded = HTML_ENTITIES[raw[1..-2]]
-        return raw unless encoded
-        encoded.dup.force_encoding(Encoding::UTF_8)
+        Inline.decode_entity(raw)
       end
 
       def ascii_punct?(byte)
