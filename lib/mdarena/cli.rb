@@ -24,6 +24,7 @@ module Mdarena
       allow_html: false,
       disallow_raw_html: false,
       extended_autolinks: false,
+      lint: false,
       diagnostics: false,
       diagnostics_only: false,
       standalone: true,
@@ -45,7 +46,8 @@ module Mdarena
       doc = Mdarena.parse(source,
                           allow_html: options[:allow_html],
                           disallow_raw_html: options[:disallow_raw_html],
-                          extended_autolinks: options[:extended_autolinks])
+                          extended_autolinks: options[:extended_autolinks],
+                          lint: options[:lint])
 
       unless options[:diagnostics_only]
         case options[:format]
@@ -83,6 +85,10 @@ module Mdarena
         opts.on("--extended-autolinks",
                 "Linkify bare URLs and email addresses (GFM)") do
           options[:extended_autolinks] = true
+        end
+        opts.on("--lint",
+                "Emit lint-style diagnostics (empty_link, missing_alt, heading_level_skip)") do
+          options[:lint] = true
         end
         opts.on("--[no-]standalone",
                 "Wrap (or not) the rendered HTML in a full document (default: on)") do |v|

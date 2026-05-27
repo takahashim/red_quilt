@@ -20,6 +20,7 @@ require_relative "mdarena/inline/lexer"
 require_relative "mdarena/inline/builder"
 require_relative "mdarena/inline_pass"
 require_relative "mdarena/extended_autolink_pass"
+require_relative "mdarena/lint_pass"
 require_relative "mdarena/renderer/html"
 require_relative "mdarena/renderer/mdast"
 
@@ -27,7 +28,7 @@ module Mdarena
   class Error < StandardError; end
 
   class << self
-    def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false)
+    def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, lint: false)
       normalized = source.to_s.dup.force_encoding(Encoding::UTF_8)
       arena = Arena.new(normalized)
       block_parser = BlockParser.new(arena)
@@ -36,16 +37,19 @@ module Mdarena
                               allow_html: allow_html,
                               disallow_raw_html: disallow_raw_html,
                               references: block_parser.references)
+      document.diagnostics.concat(block_parser.diagnostics)
       InlinePass.new(document).apply
       ExtendedAutolinkPass.new(document).apply if extended_autolinks
+      LintPass.new(document).apply if lint
       document
     end
 
-    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false)
+    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, lint: false)
       parse(source,
             allow_html: allow_html,
             disallow_raw_html: disallow_raw_html,
-            extended_autolinks: extended_autolinks).to_html
+            extended_autolinks: extended_autolinks,
+            lint: lint).to_html
     end
   end
 end

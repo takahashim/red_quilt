@@ -21,9 +21,11 @@ module Mdarena
     module_function
 
     # Attempts to consume a reference definition starting at `lines[index]`.
-    # Returns `{ reference: { label:, destination:, title: }, consumed: N }`
-    # or nil. The reference hash is what BlockParser should store in its
-    # @references table.
+    # Returns `{ reference: { label:, destination:, title: }, consumed: N,
+    # source_span: SourceSpan }` or nil. The reference hash is what
+    # BlockParser should store in its @references table; the source_span
+    # covers the byte range of the consumed lines (useful for
+    # duplicate-definition diagnostics).
     def consume(lines, index)
       Parser.new(lines, index).consume
     end
@@ -94,7 +96,9 @@ module Mdarena
             destination: ReferenceDefinition.unescape_text(strip_angle_brackets(destination)),
             title: title
           },
-          consumed: consumed
+          consumed: consumed,
+          source_span: SourceSpan.new(@lines[@index].start_byte,
+                                      @lines[@index + consumed - 1].end_byte)
         }
       end
 

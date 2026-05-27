@@ -119,6 +119,20 @@ RSpec.describe Mdarena::CLI do
     end
   end
 
+  describe "--lint" do
+    it "emits lint diagnostics when --lint is given" do
+      code, _, err = run(["--lint", "--diagnostics-only"], input: "# a\n\n### c\n")
+      expect(code).to eq(0)
+      expect(err).to include("heading_level_skip")
+    end
+
+    it "does not emit lint diagnostics without --lint" do
+      code, _, err = run(["--diagnostics"], input: "# a\n\n### c\n")
+      expect(code).to eq(0)
+      expect(err).not_to include("heading_level_skip")
+    end
+  end
+
   describe "--disallow-raw-html" do
     it "filters dangerous tags when combined with --allow-html" do
       code, out, _ = run(["--no-standalone", "--allow-html", "--disallow-raw-html"],

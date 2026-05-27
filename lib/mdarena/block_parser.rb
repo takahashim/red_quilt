@@ -8,6 +8,7 @@ module Mdarena
       @arena = arena
       @lines = build_lines(arena.source)
       @references = {}
+      @diagnostics = []
       # Cached collaborator parsers — created once and reused for every
       # block of the corresponding type (including nested ones) so the
       # dispatch path stays allocation-free.
@@ -15,7 +16,7 @@ module Mdarena
       @blockquote_parser = Blockquote::Parser.new(self)
     end
 
-    attr_reader :references, :arena
+    attr_reader :references, :arena, :diagnostics
 
     def parse
       root_id = @arena.add_node(NodeType::DOCUMENT, source_start: 0, source_len: @arena.source.bytesize)
@@ -84,7 +85,7 @@ module Mdarena
           @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: span_len(line)))
           index += 1
         elsif (reference = ReferenceDefinition.consume(lines, index))
-          store_reference(reference[:reference])
+          store_reference(reference[:reference], reference[:source_span])
           index += reference[:consumed]
         elsif table_start?(lines, index)
           index = parse_table(parent_id, lines, index, transformed)
@@ -720,8 +721,17 @@ module Mdarena
     end
 
 
-    def store_reference(reference)
-      @references[reference[:label]] ||= {
+    def store_reference(reference, source_span)
+      if @references.key?(reference[:label])
+        @diagnostics << Diagnostic.new(
+          severity: :warning,
+          rule: :duplicate_reference,
+          message: "Duplicate reference definition #{reference[:label].inspect} — keeping the first",
+          source_span: source_span
+        )
+        return
+      end
+      @references[reference[:label]] = {
         destination: reference[:destination],
         title: reference[:title]
       }
