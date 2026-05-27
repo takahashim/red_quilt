@@ -27,21 +27,25 @@ module Mdarena
   class Error < StandardError; end
 
   class << self
-    def parse(source, allow_html: false, extended_autolinks: false)
+    def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false)
       normalized = source.to_s.dup.force_encoding(Encoding::UTF_8)
       arena = Arena.new(normalized)
       block_parser = BlockParser.new(arena)
       root_id = block_parser.parse
       document = Document.new(normalized, arena, root_id,
                               allow_html: allow_html,
+                              disallow_raw_html: disallow_raw_html,
                               references: block_parser.references)
       InlinePass.new(document).apply
       ExtendedAutolinkPass.new(document).apply if extended_autolinks
       document
     end
 
-    def render_html(source, allow_html: false, extended_autolinks: false)
-      parse(source, allow_html: allow_html, extended_autolinks: extended_autolinks).to_html
+    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false)
+      parse(source,
+            allow_html: allow_html,
+            disallow_raw_html: disallow_raw_html,
+            extended_autolinks: extended_autolinks).to_html
     end
   end
 end

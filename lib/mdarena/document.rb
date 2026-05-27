@@ -4,16 +4,26 @@ module Mdarena
   class Document
     attr_reader :source, :arena, :root_id
 
-    def initialize(source, arena, root_id, allow_html: false, references: {})
+    def initialize(source, arena, root_id, allow_html: false, disallow_raw_html: false, references: {})
       @source = source
       @arena = arena
       @root_id = root_id
       @allow_html = allow_html
+      @disallow_raw_html = disallow_raw_html
       @references = references
     end
 
     def allow_html?
       @allow_html
+    end
+
+    # When true, raw HTML output filters the 9 dangerous tags defined by
+    # GFM's "Disallowed Raw HTML" extension (title, textarea, style, xmp,
+    # iframe, noembed, noframes, script, plaintext) by replacing their
+    # leading `<` with `&lt;`. Only meaningful when allow_html? is true;
+    # when allow_html? is false everything is already escaped.
+    def disallow_raw_html?
+      @disallow_raw_html
     end
 
     def references

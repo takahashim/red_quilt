@@ -236,6 +236,53 @@ RSpec.describe Mdarena do
       expect(html).to include("Hi <em>tag</em>")
     end
 
+    describe "disallow_raw_html (GFM Disallowed Raw HTML)" do
+      it "filters <script> when both allow_html and disallow_raw_html are true" do
+        html = described_class.render_html("<script>alert(1)</script>",
+                                            allow_html: true, disallow_raw_html: true)
+
+        expect(html).to include("&lt;script>alert(1)&lt;/script>")
+      end
+
+      it "filters all 9 GFM-disallowed tags case-insensitively" do
+        %w[title textarea style xmp iframe noembed noframes script plaintext].each do |tag|
+          inline_html = described_class.render_html("foo <#{tag.upcase} foo='x'>bar</#{tag}>",
+                                                     allow_html: true, disallow_raw_html: true)
+          expect(inline_html).to include("&lt;#{tag.upcase} foo='x'>")
+          expect(inline_html).to include("&lt;/#{tag}>")
+        end
+      end
+
+      it "leaves benign tags untouched even with disallow_raw_html" do
+        html = described_class.render_html("Hi <em>tag</em>",
+                                            allow_html: true, disallow_raw_html: true)
+
+        expect(html).to include("Hi <em>tag</em>")
+      end
+
+      it "does not over-filter tag names that merely start with a disallowed prefix" do
+        html = described_class.render_html("<scripts>x</scripts>",
+                                            allow_html: true, disallow_raw_html: true)
+
+        expect(html).to include("<scripts>x</scripts>")
+      end
+
+      it "filters disallowed tags inside HTML blocks too" do
+        html = described_class.render_html("<iframe src=\"x\">\nfoo\n</iframe>",
+                                            allow_html: true, disallow_raw_html: true)
+
+        expect(html).to include("&lt;iframe src=\"x\">")
+        expect(html).to include("&lt;/iframe>")
+      end
+
+      it "is inert when allow_html is false (everything is already escaped)" do
+        html = described_class.render_html("<script>alert(1)</script>",
+                                            allow_html: false, disallow_raw_html: true)
+
+        expect(html).to include("&lt;script&gt;alert(1)&lt;/script&gt;")
+      end
+    end
+
     it "suppresses unsafe url schemes" do
       html = described_class.render_html("[x](javascript:alert(1)) ![y](data:text/html,boom)")
 

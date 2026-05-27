@@ -183,9 +183,18 @@ module Mdarena
         @out << "</tr>\n"
       end
 
+      # GFM "Disallowed Raw HTML" extension: when allow_html is on but
+      # the caller has opted into filtering, the 9 dangerous tag names
+      # have their leading `<` rewritten to `&lt;` so the browser sees
+      # them as text. Word boundary (\b) prevents over-filtering
+      # (e.g. `<scripts>` is left alone).
+      DISALLOWED_RAW_TAGS = %w[title textarea style xmp iframe noembed noframes script plaintext].freeze
+      DISALLOWED_RAW_TAG_RE = /<(?=\/?(?:#{DISALLOWED_RAW_TAGS.join("|")})\b)/i.freeze
+
       def render_raw_html(text, block:)
         if @document.allow_html?
-          @out << text
+          out_text = @document.disallow_raw_html? ? filter_disallowed_raw(text) : text
+          @out << out_text
           @out << "\n" if block
         else
           escaped = escape_html(text)
@@ -195,6 +204,10 @@ module Mdarena
             @out << escaped
           end
         end
+      end
+
+      def filter_disallowed_raw(text)
+        text.gsub(DISALLOWED_RAW_TAG_RE, "&lt;")
       end
 
       def collect_plain_text(node_id)

@@ -22,6 +22,7 @@ module Mdarena
     DEFAULTS = {
       format: :html,
       allow_html: false,
+      disallow_raw_html: false,
       extended_autolinks: false,
       diagnostics: false,
       diagnostics_only: false,
@@ -43,6 +44,7 @@ module Mdarena
 
       doc = Mdarena.parse(source,
                           allow_html: options[:allow_html],
+                          disallow_raw_html: options[:disallow_raw_html],
                           extended_autolinks: options[:extended_autolinks])
 
       unless options[:diagnostics_only]
@@ -73,6 +75,10 @@ module Mdarena
         end
         opts.on("--allow-html", "Pass raw HTML through to the output") do
           options[:allow_html] = true
+        end
+        opts.on("--disallow-raw-html",
+                "Filter dangerous tags (script, iframe, ...) even with --allow-html (GFM)") do
+          options[:disallow_raw_html] = true
         end
         opts.on("--extended-autolinks",
                 "Linkify bare URLs and email addresses (GFM)") do

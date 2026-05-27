@@ -119,6 +119,22 @@ RSpec.describe Mdarena::CLI do
     end
   end
 
+  describe "--disallow-raw-html" do
+    it "filters dangerous tags when combined with --allow-html" do
+      code, out, _ = run(["--no-standalone", "--allow-html", "--disallow-raw-html"],
+                         input: "<script>x</script>\n")
+      expect(code).to eq(0)
+      expect(out).to include("&lt;script>x&lt;/script>")
+    end
+
+    it "leaves safe tags alone when --disallow-raw-html is set" do
+      code, out, _ = run(["--no-standalone", "--allow-html", "--disallow-raw-html"],
+                         input: "Hi <em>tag</em>\n")
+      expect(code).to eq(0)
+      expect(out).to include("<em>tag</em>")
+    end
+  end
+
   describe "--diagnostics" do
     it "writes diagnostics to stderr while still rendering HTML" do
       code, out, err = run(["--no-standalone", "--diagnostics"], input: "[a](javascript:1)\n")
