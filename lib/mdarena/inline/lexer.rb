@@ -23,12 +23,13 @@ module Mdarena
         [0x2A, 0x5F, 0x60, 0x5B, 0x5D, 0x21, 0x3C, 0x26, 0x5C, 0x0A, 0x7E].each { |b| a[b] = true }
         a.freeze
       end
-      # Same set as SPECIAL_BYTES, for String#byteindex / StringScanner to
-      # jump over long plain-text runs at C speed.
+      # Same set as SPECIAL_BYTES, for String#byteindex to jump over long
+      # plain-text runs at C speed.
       SPECIAL_BYTE_RE = /[*_`\[\]!<&\\\n~]/.freeze
 
-      # Anchored regexes for StringScanner#scan. StringScanner already
-      # anchors at the current pos, so no `\G` is needed.
+      # Anchored regexes for StringScanner#scan (still used by
+      # scan_angle / scan_amp). StringScanner anchors at the current pos,
+      # so no `\G` is needed.
       URI_AUTOLINK_RE = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
       EMAIL_AUTOLINK_RE = /<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
       # CommonMark spec 6.6 "Raw HTML": six forms — open tag, closing tag,
@@ -43,13 +44,6 @@ module Mdarena
       HTML_DECLARATION_RE = %r{<![A-Za-z][^>]*>}.freeze
       HTML_CDATA_RE = %r{<!\[CDATA\[[\s\S]*?\]\]>}.freeze
       ENTITY_RE = /&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/.freeze
-
-      # Per-character delim-run skip regexes (one per recognised delimiter
-      # character, frozen at load time).
-      ASTERISK_RUN_RE = /\*+/.freeze
-      UNDERSCORE_RUN_RE = /_+/.freeze
-      TILDE_RUN_RE = /~+/.freeze
-      BACKTICK_RUN_RE = /`+/.freeze
 
       def initialize(source)
         @source = source
@@ -73,39 +67,28 @@ module Mdarena
       private
 
       def scan(tokens)
-        # Hot loop. Cache @ss.pos / @end into locals to avoid per-iter
-        # StringScanner / ivar reads, and inline the plain-text branch
-        # (the most common one) so we save a `scan_text` method call
-        # per text run.
+        # Hot loop. `pos` is the source of truth during the scan; @ss.pos
+        # is only synced when entering scan_angle / scan_amp (which still
+        # use StringScanner for the regex match) and at loop exit. The
+        # other scan_* helpers take `pos` as an arg and return the new
+        # position, so the round-trip through @ss.pos is avoided.
         pos = @ss.pos
         end_pos = @end
         while pos < end_pos
           byte = @source.getbyte(pos)
           case byte
           when 0x0A # \n
-            @ss.pos = pos
-            scan_line_ending(tokens)
-            pos = @ss.pos
+            pos = scan_line_ending(tokens, pos)
           when 0x5C # \\ (backslash)
-            @ss.pos = pos
-            scan_backslash(tokens)
-            pos = @ss.pos
+            pos = scan_backslash(tokens, pos, end_pos)
           when 0x60 # `
-            @ss.pos = pos
-            scan_code_delimiter(tokens)
-            pos = @ss.pos
+            pos = scan_code_delimiter(tokens, pos, end_pos)
           when 0x2A # *
-            @ss.pos = pos
-            scan_delim_run(tokens, ASTERISK_RUN_RE, "*", 0x2A)
-            pos = @ss.pos
+            pos = scan_delim_run(tokens, pos, end_pos, "*", 0x2A)
           when 0x5F # _
-            @ss.pos = pos
-            scan_delim_run(tokens, UNDERSCORE_RUN_RE, "_", 0x5F)
-            pos = @ss.pos
+            pos = scan_delim_run(tokens, pos, end_pos, "_", 0x5F)
           when 0x7E # ~ (GFM strikethrough)
-            @ss.pos = pos
-            scan_delim_run(tokens, TILDE_RUN_RE, "~", 0x7E)
-            pos = @ss.pos
+            pos = scan_delim_run(tokens, pos, end_pos, "~", 0x7E)
           when 0x5B # [
             tokens.emit(TokenKind::LBRACKET, start_byte: pos, end_byte: pos + 1)
             pos += 1
@@ -113,9 +96,7 @@ module Mdarena
             tokens.emit(TokenKind::RBRACKET, start_byte: pos, end_byte: pos + 1)
             pos += 1
           when 0x21 # !
-            @ss.pos = pos
-            scan_bang(tokens)
-            pos = @ss.pos
+            pos = scan_bang(tokens, pos, end_pos)
           when 0x3C # <
             @ss.pos = pos
             scan_angle(tokens)
@@ -140,96 +121,90 @@ module Mdarena
         @ss.pos = pos
       end
 
-      def scan_line_ending(tokens)
-        start = @ss.pos
-        @ss.pos += 1
+      def scan_line_ending(tokens, pos)
         # Count trailing ASCII spaces immediately before the newline; the
         # builder uses this to decide softbreak vs hardbreak (>= 2 spaces).
         trailing_spaces = 0
-        i = start - 1
+        i = pos - 1
         while i >= 0 && @source.getbyte(i) == 0x20
           trailing_spaces += 1
           i -= 1
         end
+        new_pos = pos + 1
         tokens.emit(TokenKind::LINE_ENDING,
-                    start_byte: start, end_byte: @ss.pos,
+                    start_byte: pos, end_byte: new_pos,
                     int1: trailing_spaces)
+        new_pos
       end
 
-      def scan_backslash(tokens)
-        start = @ss.pos
-        nxt_pos = start + 1
-        if nxt_pos >= @end
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: nxt_pos)
-          @ss.pos = nxt_pos
-          return
+      def scan_backslash(tokens, pos, end_pos)
+        nxt_pos = pos + 1
+        if nxt_pos >= end_pos
+          tokens.emit(TokenKind::TEXT, start_byte: pos, end_byte: nxt_pos)
+          return nxt_pos
         end
 
         nxt = @source.getbyte(nxt_pos)
         if nxt == 0x0A
           # "\\\n" → hardbreak (backslash form). int2 = 1 signals the form.
-          @ss.pos = nxt_pos + 1
           tokens.emit(TokenKind::LINE_ENDING,
-                      start_byte: start, end_byte: @ss.pos,
+                      start_byte: pos, end_byte: nxt_pos + 1,
                       int1: 0, int2: 1)
+          nxt_pos + 1
         elsif ascii_punct?(nxt)
-          @ss.pos = nxt_pos + 1
           tokens.emit(TokenKind::ESCAPED_CHAR,
-                      start_byte: start, end_byte: @ss.pos,
+                      start_byte: pos, end_byte: nxt_pos + 1,
                       str1: nxt.chr)
+          nxt_pos + 1
         else
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: nxt_pos)
-          @ss.pos = nxt_pos
+          tokens.emit(TokenKind::TEXT, start_byte: pos, end_byte: nxt_pos)
+          nxt_pos
         end
       end
 
-      def scan_code_delimiter(tokens)
-        start = @ss.pos
-        # C-level character-class skip beats a Ruby `while ... getbyte`
-        # loop for long backtick runs.
-        count = @ss.skip(BACKTICK_RUN_RE)
-        finish = @ss.pos
-        if finish > @end
-          # Skip overshot the lexer's logical end; clamp back.
-          count -= finish - @end
-          @ss.pos = @end
+      def scan_code_delimiter(tokens, pos, end_pos)
+        # Manual byte loop. Backtick runs are usually short (1-3 bytes),
+        # so a regex skip's setup cost outweighs the per-byte compare.
+        i = pos
+        while i < end_pos && @source.getbyte(i) == 0x60
+          i += 1
         end
         tokens.emit(TokenKind::CODE_DELIMITER,
-                    start_byte: start, end_byte: @ss.pos,
-                    int1: count)
+                    start_byte: pos, end_byte: i,
+                    int1: i - pos)
+        i
       end
 
-      def scan_delim_run(tokens, run_re, char, byte)
-        start = @ss.pos
-        @ss.skip(run_re)
-        if @ss.pos > @end
-          @ss.pos = @end
+      def scan_delim_run(tokens, pos, end_pos, char, byte)
+        i = pos
+        while i < end_pos && @source.getbyte(i) == byte
+          i += 1
         end
-        count = @ss.pos - start
-        prev_char = Flanking.char_before(@source, start, @start)
-        next_char = Flanking.char_at(@source, @ss.pos, @end)
+        count = i - pos
+        prev_char = Flanking.char_before(@source, pos, @start)
+        next_char = Flanking.char_at(@source, i, end_pos)
         can_open, can_close = Flanking.can_open_close(char, prev_char, next_char)
-        # A run that can neither open nor close (e.g. underscores inside a
-        # word) can never participate in emphasis, so emit it as plain TEXT
-        # to allow text coalescing with neighbours.
+        # A run that can neither open nor close (e.g. underscores inside
+        # a word) can never participate in emphasis, so emit it as plain
+        # TEXT to allow text coalescing with neighbours.
         if !can_open && !can_close
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos)
-          return
+          tokens.emit(TokenKind::TEXT, start_byte: pos, end_byte: i)
+          return i
         end
         flags = (can_open ? 0b10 : 0) | (can_close ? 0b01 : 0)
         tokens.emit(TokenKind::DELIM_RUN,
-                    start_byte: start, end_byte: @ss.pos,
+                    start_byte: pos, end_byte: i,
                     int1: byte, int2: count, int3: flags)
+        i
       end
 
-      def scan_bang(tokens)
-        start = @ss.pos
-        if @ss.pos + 1 < @end && @source.getbyte(@ss.pos + 1) == 0x5B # [
-          @ss.pos += 2
-          tokens.emit(TokenKind::BANG_LBRACKET, start_byte: start, end_byte: @ss.pos)
+      def scan_bang(tokens, pos, end_pos)
+        if pos + 1 < end_pos && @source.getbyte(pos + 1) == 0x5B # [
+          tokens.emit(TokenKind::BANG_LBRACKET, start_byte: pos, end_byte: pos + 2)
+          pos + 2
         else
-          @ss.pos += 1
-          tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos)
+          tokens.emit(TokenKind::TEXT, start_byte: pos, end_byte: pos + 1)
+          pos + 1
         end
       end
 
