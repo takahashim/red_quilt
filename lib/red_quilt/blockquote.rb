@@ -9,7 +9,7 @@ module RedQuilt
   # blockquote (including nested ones) — per-call state lives in method
   # locals so reentrant `#parse` calls are safe.
   module Blockquote
-    BLOCKQUOTE_PREFIX_RE = /\A {0,3}>/.freeze
+    BLOCKQUOTE_PREFIX_RE = /\A {0,3}>/
 
     module_function
 
@@ -39,7 +39,7 @@ module RedQuilt
                                      blank: !content.match?(/\S/))
       end
       i += 1
-      abs_col += 1  # consume `>`
+      abs_col += 1 # consume `>`
 
       # Count column width of leading whitespace after `>` using
       # absolute-column tracking so a tab right after `>` (at col 1) is

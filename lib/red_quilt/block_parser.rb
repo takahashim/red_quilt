@@ -138,8 +138,6 @@ module RedQuilt
       true
     end
 
-
-
     # A line at less-than-N indent breaks lazy continuation when it would
     # itself start a new block (heading, thematic break, fenced/indented
     # code, html block, blockquote, list item, table). Same predicate as
@@ -160,7 +158,6 @@ module RedQuilt
       return true if table_start?(lines, index)
       false
     end
-
 
     def parse_fenced_code(parent_id, lines, index, fence, transformed)
       start_line = lines[index]
@@ -361,8 +358,8 @@ module RedQuilt
         # outer collector, so we must not let `paragraph_interrupt?`
         # split them off into a new block (which would also try to
         # parse them as e.g. a list item start).
-        unless line.lazy
-          break if index > start_index && paragraph_interrupt?(lines, index)
+        if !line.lazy && index > start_index && paragraph_interrupt?(lines, index)
+          break
         end
         # NOTE: Per CommonMark, a `[label]: ...` line cannot start a
         # link reference definition inside an open paragraph — it's
@@ -510,7 +507,7 @@ module RedQuilt
     #   followed by the content
     # - optional trailing `#`s are only stripped when separated from the
     #   content by whitespace (so `# foo#` keeps the `#`)
-    ATX_HEADING_RE = /\A {0,3}(\#{1,6})(?:[ \t]+\#+[ \t]*|[ \t]+(.*?)(?:[ \t]+\#+)?[ \t]*|[ \t]*)\z/.freeze
+    ATX_HEADING_RE = /\A {0,3}(\#{1,6})(?:[ \t]+\#+[ \t]*|[ \t]+(.*?)(?:[ \t]+\#+)?[ \t]*|[ \t]*)\z/
 
     def atx_heading(text)
       match = ATX_HEADING_RE.match(text)
@@ -525,12 +522,11 @@ module RedQuilt
     # the same character (`*`, `-`, or `_`) optionally separated by
     # whitespace, and nothing else on the line. Lines indented 4+ spaces
     # are indented code, not thematic breaks.
-    THEMATIC_BREAK_RE = /\A {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})\z/.freeze
+    THEMATIC_BREAK_RE = /\A {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})\z/
 
     def thematic_break?(text)
       THEMATIC_BREAK_RE.match?(text)
     end
-
 
     def fenced_code_start(text)
       match = /\A( {0,3})(`{3,}|~{3,})[ \t]*(.*?)\s*\z/.match(text)
@@ -680,7 +676,7 @@ module RedQuilt
       tfoot th thead title tr track ul
     ].freeze
     HTML_BLOCK_TYPE_6_RE =
-      %r{\A</?(?:#{HTML_BLOCK_TYPE_6_NAMES.join("|")})(?:\s|>|/>|\z)}i.freeze
+      %r{\A</?(?:#{HTML_BLOCK_TYPE_6_NAMES.join('|')})(?:\s|>|/>|\z)}i
 
     def table_start?(lines, index)
       return false if index + 1 >= lines.length
@@ -711,15 +707,14 @@ module RedQuilt
       (?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*
       \s*/?>
       \z
-    }x.freeze
-    HTML_TYPE_7_CLOSING_TAG_RE = %r{\A</[A-Za-z][A-Za-z0-9-]*\s*>\z}.freeze
+    }x
+    HTML_TYPE_7_CLOSING_TAG_RE = %r{\A</[A-Za-z][A-Za-z0-9-]*\s*>\z}
 
     def valid_html_tag?(text)
       # Fast reject: every type-7 tag must begin with `<`.
       return false unless text.start_with?("<")
       HTML_TYPE_7_OPEN_TAG_RE.match?(text) || HTML_TYPE_7_CLOSING_TAG_RE.match?(text)
     end
-
 
     def store_reference(reference, source_span)
       if @references.key?(reference[:label])

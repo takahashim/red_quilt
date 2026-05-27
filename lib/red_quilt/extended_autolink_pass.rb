@@ -15,15 +15,15 @@ module RedQuilt
     }x
 
     EMAIL_RE = /
-      (?<![A-Za-z0-9._+\-])
-      [A-Za-z0-9._+\-]+
+      (?<![A-Za-z0-9._+-])
+      [A-Za-z0-9._+-]+
       @
       [A-Za-z0-9](?:[A-Za-z0-9\-_]{0,61}[A-Za-z0-9])?
       (?:\.[A-Za-z0-9](?:[A-Za-z0-9\-_]{0,61}[A-Za-z0-9])?)+
     /x
 
-    TRAILING_PUNCT_RE = /[?!.,:*_~]+\z/.freeze
-    TRAILING_ENTITY_RE = /&[A-Za-z0-9]+;\z/.freeze
+    TRAILING_PUNCT_RE = /[?!.,:*_~]+\z/
+    TRAILING_ENTITY_RE = /&[A-Za-z0-9]+;\z/
 
     # AST contexts whose TEXT descendants must not be auto-linkified.
     SKIP_TYPES = [
@@ -130,10 +130,8 @@ module RedQuilt
         before = candidate.length
         candidate = candidate.sub(TRAILING_PUNCT_RE, "")
         candidate = strip_excess_close_paren(candidate) unless email
-        if candidate.end_with?(";")
-          if (em = TRAILING_ENTITY_RE.match(candidate))
-            candidate = candidate[0...em.begin(0)]
-          end
+        if candidate.end_with?(";") && (em = TRAILING_ENTITY_RE.match(candidate))
+          candidate = candidate[0...em.begin(0)]
         end
         break candidate if candidate.length == before
       end

@@ -35,7 +35,7 @@ module RedQuilt
       leading = m[1].length
       rest = text[leading..]
 
-      if (bm = /\A([*+\-])(?:([ \t]+)(.*)|([ \t]*)\z)/.match(rest))
+      if (bm = /\A([*+-])(?:([ \t]+)(.*)|([ \t]*)\z)/.match(rest))
         marker = bm[1]
         if bm[2]
           # `spaces_after` is column width, not byte length, so a tab

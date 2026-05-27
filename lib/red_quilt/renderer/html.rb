@@ -23,7 +23,7 @@ module RedQuilt
       # 3.0+ rewrites `'` -> `&#39;` which fails CommonMark spec
       # comparisons).
       HTML_ESCAPE_TABLE = { "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", '"' => "&quot;" }.freeze
-      HTML_ESCAPE_RE = /[&<>"]/.freeze
+      HTML_ESCAPE_RE = /[&<>"]/
 
       def escape_html(str)
         str.gsub(HTML_ESCAPE_RE, HTML_ESCAPE_TABLE)
@@ -189,7 +189,7 @@ module RedQuilt
       # them as text. Word boundary (\b) prevents over-filtering
       # (e.g. `<scripts>` is left alone).
       DISALLOWED_RAW_TAGS = %w[title textarea style xmp iframe noembed noframes script plaintext].freeze
-      DISALLOWED_RAW_TAG_RE = /<(?=\/?(?:#{DISALLOWED_RAW_TAGS.join("|")})\b)/i.freeze
+      DISALLOWED_RAW_TAG_RE = /<(?=\/?(?:#{DISALLOWED_RAW_TAGS.join('|')})\b)/i
 
       def render_raw_html(text, block:)
         if @document.allow_html?

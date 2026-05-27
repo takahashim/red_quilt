@@ -21,7 +21,7 @@ module RedQuilt
         "-._~:/?#@!$&'()*+,;=".each_byte { |b| a[b] = true }
         a.freeze
       end
-      TRAILING_SPACE_RE = (1..8).map { |n| / {#{n},}\z/.freeze }.freeze
+      TRAILING_SPACE_RE = (1..8).map { |n| / {#{n},}\z/ }.freeze
 
       class Delimiter
         attr_accessor :node_id, :char, :count, :can_open, :can_close

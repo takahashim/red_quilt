@@ -29,9 +29,7 @@ FIXTURES = {
 FIXTURES.each do |name, source|
   raise "red_quilt empty on #{name}" if RedQuilt.render_html(source).empty?
   raise "kramdown empty on #{name}" if Kramdown::Document.new(source).to_html.empty?
-end
 
-FIXTURES.each do |name, source|
   puts
   puts "== #{name} (#{source.bytesize} bytes) =="
   Benchmark.ips do |x|

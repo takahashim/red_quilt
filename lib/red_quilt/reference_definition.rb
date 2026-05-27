@@ -14,7 +14,7 @@ module RedQuilt
     # A reference label may contain `\[` / `\]` (backslash-escaped),
     # but never an unescaped `[` or `]`. Newlines inside the label are
     # allowed and collapsed by normalize_label.
-    REF_DEF_RE = /\A {0,3}\[((?:[^\\\[\]]|\\.)+)\]:(.*)\z/m.freeze
+    REF_DEF_RE = /\A {0,3}\[((?:[^\\\[\]]|\\.)+)\]:(.*)\z/m
 
     TITLE_CLOSERS = { '"' => '"', "'" => "'", "(" => ")" }.freeze
 

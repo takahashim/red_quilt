@@ -24,12 +24,12 @@ module RedQuilt
       @arena.child_ids(@node_id).map { |child_id| NodeRef.new(@document, child_id) }
     end
 
-    def walk
+    def walk(&block)
       return enum_for(:walk) unless block_given?
 
       yield self
       @arena.child_ids(@node_id).each do |child_id|
-        NodeRef.new(@document, child_id).walk { |node| yield node }
+        NodeRef.new(@document, child_id).walk(&block)
       end
     end
 

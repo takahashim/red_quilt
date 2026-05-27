@@ -17,13 +17,13 @@ require "benchmark/ips"
 require_relative "../lib/red_quilt"
 
 FIXTURES = {
-  nested_blockquote:  "> level 1\n> > level 2\n> > > level 3\n" * 50,
-  long_list:          (1..200).map { |i| "- item #{i}" }.join("\n"),
-  nested_list:        (1..50).map { |i| "- top #{i}\n  - sub #{i}\n    - sub sub #{i}" }.join("\n"),
-  ref_defs:           (1..100).map { |i| "[ref#{i}]: /url/#{i} \"title #{i}\"" }.join("\n"),
-  html_blocks:        "<div>\nhello\n</div>\n\n" * 50,
-  thematic_breaks:    "---\n\nparagraph\n\n" * 100,
-  mixed_block:        "# heading\n\nparagraph\n\n> quote\n> more quote\n\n- list item 1\n- list item 2\n  - nested\n\n```\ncode\n```\n\n" * 20
+  nested_blockquote: "> level 1\n> > level 2\n> > > level 3\n" * 50,
+  long_list: (1..200).map { |i| "- item #{i}" }.join("\n"),
+  nested_list: (1..50).map { |i| "- top #{i}\n  - sub #{i}\n    - sub sub #{i}" }.join("\n"),
+  ref_defs: (1..100).map { |i| "[ref#{i}]: /url/#{i} \"title #{i}\"" }.join("\n"),
+  html_blocks: "<div>\nhello\n</div>\n\n" * 50,
+  thematic_breaks: "---\n\nparagraph\n\n" * 100,
+  mixed_block: "# heading\n\nparagraph\n\n> quote\n> more quote\n\n- list item 1\n- list item 2\n  - nested\n\n```\ncode\n```\n\n" * 20
 }.freeze
 
 Benchmark.ips do |x|

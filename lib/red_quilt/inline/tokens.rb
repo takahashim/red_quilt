@@ -50,13 +50,13 @@ module RedQuilt
         @kind.empty?
       end
 
-      def kind(id);       @kind[id];       end
-      def start_byte(id); @start_byte[id]; end
-      def end_byte(id);   @end_byte[id];   end
-      def int1(id);       @int1[id];       end
-      def int2(id);       @int2[id];       end
-      def int3(id);       @int3[id];       end
-      def str1(id);       @str1[id];       end
+      def kind(id) = @kind.[](id)
+      def start_byte(id) = @start_byte.[](id)
+      def end_byte(id) = @end_byte.[](id)
+      def int1(id) = @int1.[](id)
+      def int2(id) = @int2.[](id)
+      def int3(id) = @int3.[](id)
+      def str1(id) = @str1.[](id)
 
       def each_id
         return enum_for(:each_id) unless block_given?

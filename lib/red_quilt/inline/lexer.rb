@@ -25,25 +25,25 @@ module RedQuilt
       end
       # Same set as SPECIAL_BYTES, for String#byteindex to jump over long
       # plain-text runs at C speed.
-      SPECIAL_BYTE_RE = /[*_`\[\]!<&\\\n~]/.freeze
+      SPECIAL_BYTE_RE = /[*_`\[\]!<&\\\n~]/
 
       # Anchored regexes for StringScanner#scan (still used by
       # scan_angle / scan_amp). StringScanner anchors at the current pos,
       # so no `\G` is needed.
-      URI_AUTOLINK_RE = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/.freeze
-      EMAIL_AUTOLINK_RE = /<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.freeze
+      URI_AUTOLINK_RE = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/
+      EMAIL_AUTOLINK_RE = /<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/
       # CommonMark spec 6.6 "Raw HTML": six forms — open tag, closing tag,
       # HTML comment, processing instruction, declaration, CDATA section.
       # Attribute values are allowed to span lines.
-      HTML_OPEN_TAG_RE = %r{<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*/?>}.freeze
-      HTML_CLOSING_TAG_RE = %r{</[A-Za-z][A-Za-z0-9-]*\s*>}.freeze
+      HTML_OPEN_TAG_RE = %r{<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*/?>}
+      HTML_CLOSING_TAG_RE = %r{</[A-Za-z][A-Za-z0-9-]*\s*>}
       # Comment: `<!-->`, `<!--->`, or `<!-- text -->` where text doesn't
       # start with `>` or `->`, end with `-`, or contain `--`.
-      HTML_COMMENT_RE = %r{<!-->|<!--->|<!--(?![>])(?!->)[\s\S]*?(?<!-)-->}.freeze
-      HTML_PROC_INST_RE = %r{<\?[\s\S]*?\?>}.freeze
-      HTML_DECLARATION_RE = %r{<![A-Za-z][^>]*>}.freeze
-      HTML_CDATA_RE = %r{<!\[CDATA\[[\s\S]*?\]\]>}.freeze
-      ENTITY_RE = /&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/.freeze
+      HTML_COMMENT_RE = %r{<!-->|<!--->|<!--(?!>)(?!->)[\s\S]*?(?<!-)-->}
+      HTML_PROC_INST_RE = %r{<\?[\s\S]*?\?>}
+      HTML_DECLARATION_RE = %r{<![A-Za-z][^>]*>}
+      HTML_CDATA_RE = %r{<!\[CDATA\[[\s\S]*?\]\]>}
+      ENTITY_RE = /&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/
 
       def initialize(source)
         @source = source
@@ -113,7 +113,7 @@ module RedQuilt
             pos += 1
             if pos < end_pos
               next_special = @source_b.byteindex(SPECIAL_BYTE_RE, pos)
-              pos = (next_special.nil? || next_special >= end_pos) ? end_pos : next_special
+              pos = next_special.nil? || next_special >= end_pos ? end_pos : next_special
             end
             tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: pos)
           end

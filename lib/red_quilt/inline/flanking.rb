@@ -7,11 +7,11 @@ module RedQuilt
     # Determines whether a delimiter run can open and/or close an emphasis.
     # All input positions are byte offsets into the document source.
     module Flanking
-      UNICODE_WHITESPACE_RE = /\A[\s   -   　]\z/.freeze
+      UNICODE_WHITESPACE_RE = /\A[\s   -   　]\z/
       # CommonMark 0.31.2 expanded the definition of "punctuation" for
       # flanking purposes to also include Unicode S (symbol) category, so
       # currency / math / other symbols form delimiter-run boundaries.
-      UNICODE_PUNCT_RE = /\A[\p{P}\p{S}]\z/.freeze
+      UNICODE_PUNCT_RE = /\A[\p{P}\p{S}]\z/
 
       # Fast-path lookup tables for ASCII bytes. Flanking inputs are mostly
       # single-byte ASCII; the tables let us skip regex matches entirely
@@ -44,8 +44,9 @@ module RedQuilt
         while i >= range_start && i > byte_pos - 4
           b = source.getbyte(i)
           if b < 0x80 || b >= 0xC0
-      return source.byteslice(i, byte_pos - i)
+            return source.byteslice(i, byte_pos - i)
           end
+
           i -= 1
         end
         nil
@@ -58,14 +59,14 @@ module RedQuilt
         return b.chr if b < 0x80
 
         len = if b < 0xC0
-          1
-        elsif b < 0xE0
-          2
-        elsif b < 0xF0
-          3
-        else
-          4
-        end
+                1
+              elsif b < 0xE0
+                2
+              elsif b < 0xF0
+                3
+              else
+                4
+              end
         source.byteslice(byte_pos, [len, range_end - byte_pos].min)
       end
 
@@ -74,6 +75,7 @@ module RedQuilt
         if char.bytesize == 1
           return ASCII_WHITESPACE[char.getbyte(0)]
         end
+
         UNICODE_WHITESPACE_RE.match?(char)
       end
 
@@ -82,6 +84,7 @@ module RedQuilt
         if char.bytesize == 1
           return ASCII_PUNCT[char.getbyte(0)]
         end
+
         UNICODE_PUNCT_RE.match?(char)
       end
 
@@ -89,6 +92,7 @@ module RedQuilt
       def left_flanking?(prev_char, next_char)
         return false if whitespace?(next_char)
         return true unless punctuation?(next_char)
+
         whitespace?(prev_char) || punctuation?(prev_char)
       end
 
@@ -96,6 +100,7 @@ module RedQuilt
       def right_flanking?(prev_char, next_char)
         return false if whitespace?(prev_char)
         return true unless punctuation?(prev_char)
+
         whitespace?(next_char) || punctuation?(next_char)
       end
 
