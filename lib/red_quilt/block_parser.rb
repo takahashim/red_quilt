@@ -482,8 +482,11 @@ module RedQuilt
 
     def build_lines(source)
       # split("\n", -1) avoids the extra slice/allocation that
-      # each_line + chomp incurs per line, and `\S` against the line is
-      # cheaper than allocating a stripped copy just to check emptiness.
+      # each_line + chomp incurs per line. The blank-line check uses
+      # /[^ \t]/ (not /\S/) because CommonMark defines a blank line as
+      # "empty, or containing only spaces (U+0020) or tabs (U+0009)" --
+      # other whitespace (e.g. form feed U+000C) does NOT make a line
+      # blank and must continue an enclosing paragraph.
       parts = source.split("\n", -1)
       parts.pop if source.end_with?("\n")
       lines = []
@@ -494,7 +497,7 @@ module RedQuilt
           content: raw,
           start_byte: offset,
           end_byte: offset + size,
-          blank: !raw.match?(/\S/)
+          blank: !raw.match?(/[^ \t]/)
         )
         offset += size + 1
       end
