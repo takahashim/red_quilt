@@ -1,6 +1,6 @@
 # RedQuilt
 
-A pragmatic Markdown document processor for Ruby, with an arena-style AST, source spans, safe-by-default HTML rendering, and optional performance optimizations.
+A modern Markdown document processor for Ruby, with an arena-style AST, source spans, safe-by-default HTML rendering, and optional performance optimizations.
 
 ## Installation
 
@@ -95,61 +95,34 @@ loc = map.line_column(byte_offset)
 
 ## Supported Syntax
 
-### Block elements (✅ full support)
+### Block elements
 
-- **Paragraphs**: Plain text blocks
-- **Headings**: ATX headings (`# Title`)
-- **Thematic breaks**: `---`, `***`, `___`
-- **Code blocks**: Indented and fenced (with info string)
-- **Block quotes**: `> quote text`
-- **Lists**: Ordered (`1.`) and unordered (`-`, `*`, `+`)
-- **List items**: Nested blocks, tight/loose detection
-- **Tables**: GFM syntax with header/body rows
-- **Raw HTML blocks**: 7 types (script, comment, etc.)
-- **Link reference definitions**: `[foo]: /url "title"`
+- Paragraphs: Plain text blocks
+- Headings: ATX headings (`# Title`)
+- Thematic breaks: `---`, `***`, `___`
+- Code blocks: Indented and fenced (with info string)
+- Block quotes: `> quote text`
+- Lists: Ordered (`1.`) and unordered (`-`, `*`, `+`)
+- List items: Nested blocks, tight/loose detection
+- Tables: GFM syntax with header/body rows
+- Raw HTML blocks: 7 types (script, comment, etc.)
+- Link reference definitions: `[foo]: /url "title"`
 
-### Inline elements (✅ mostly supported)
+### Inline elements
 
-- **Text**: Plain strings
-- **Emphasis/Strong**: `*em*`, `**strong**`, `_em_`, `__strong__`
-- **Code spans**: `` `code` ``
-- **Links**: `[text](/url)`, `[text](/url "title")`, reference links
-- **Images**: `![alt](/url)`, `![alt](/url "title")`, reference images
-- **Soft/Hard line breaks**: Implicit (soft) and explicit `\` or two spaces
-- **Raw HTML inline**: `<a href="#">link</a>`
-- **Autolinks**: `<http://example.com>`, `<user@example.com>`
-- **Character references**: `&amp;`, `&#x27;`, etc.
+- Text: Plain strings
+- Emphasis/Strong: `*em*`, `**strong**`, `_em_`, `__strong__`
+- Code spans: `` `code` ``
+- Links: `[text](/url)`, `[text](/url "title")`, reference links
+- Images: `![alt](/url)`, `![alt](/url "title")`, reference images
+- Soft/Hard line breaks: Implicit (soft) and explicit `\` or two spaces
+- Raw HTML inline: `<a href="#">link</a>`
+- Autolinks: `<http://example.com>`, `<user@example.com>`
+- Character references: `&amp;`, `&#x27;`, etc.
 
 ## CommonMark Compatibility
 
 RedQuilt achieves 100% compliance with the CommonMark v0.31.2 specification.
-
-### Fully supported features
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Tabs | ✅ | |
-| ATX headings | ✅ | |
-| Thematic breaks | ✅ | |
-| Indented code blocks | ✅ | |
-| Fenced code blocks | ✅ | Info string: first word becomes `language-xxx` class |
-| HTML blocks (types 1-7) | ✅ | All CommonMark types with correct termination |
-| Block quotes | ✅ | |
-| Lists (ordered/unordered) | ✅ | Tight/loose detection |
-| List items | ✅ | Nested content, continuation rules |
-| Link reference definitions | ✅ | Case/whitespace normalization |
-| Emphasis/Strong | ✅ | Full delimiter-run stack (CommonMark spec 6.2) |
-| Code spans | ✅ | |
-| Links | ✅ | Inline and reference forms |
-| Images | ✅ | Inline and reference forms |
-| Autolinks | ✅ | URI (`<http://...>`) and email (`<user@...>`) |
-| Extended Autolinks | ✅ | GFM: bare URLs and email (enable with `extended_autolinks: true`) |
-| Raw HTML inline | ✅ | Escaped by default, passable with `allow_html: true` |
-| Hard/soft line breaks | ✅ | Two spaces or backslash for hard break |
-| Backslash escapes | ✅ | All punctuation escapes supported |
-| Character references | ✅ | Full HTML5 entity support |
-
-All CommonMark v0.31.2 specification test cases pass without exception.
 
 ## Command-line Tool
 
@@ -200,7 +173,7 @@ Exit code is 0 on success, 1 if errors are detected.
 
 ### Security model
 
-RedQuilt prioritizes **security by default**:
+RedQuilt prioritizes security by default:
 
 ```ruby
 # Default: All HTML is escaped, dangerous URLs blocked
@@ -215,9 +188,9 @@ RedQuilt.render_html("[click](javascript:alert(1))")
 
 In link/image destinations, only these schemes are permitted:
 
-- **Absolute**: `http://`, `https://`, `ftp://`, `tel:`, `ssh://`
-- **Relative**: `/path`, `#anchor`, `path/to/file`
-- **Special**: `mailto:` (autolinks only)
+- Absolute: `http://`, `https://`, `ftp://`, `tel:`, `ssh://`
+- Relative: `/path`, `#anchor`, `path/to/file`
+- Special: `mailto:` (autolinks only)
 
 All other schemes (`javascript:`, `data:`, `vbscript:`, etc.) are blocked by replacing the URL with an empty string.
 
@@ -288,29 +261,31 @@ Runs 70+ CommonMark compatibility and feature tests.
 
 ```bash
 ruby spec/bench_inline.rb
+ruby spec/bench_block.rb
 ```
 
 Profiles parse performance on various Markdown patterns.
 
-## Performance (v1.2.0, Ruby 4.0.5)
+## Performance (v0.6.0, Ruby 4.0.5)
 
-RedQuilt achieves **kramdown parity** with the CommonMark compliance to spare.
+Comparison against [kramdown](https://kramdown.gettalong.org/) on arm64-darwin (Apple Silicon), measured with `spec/bench_vs_kramdown.rb` (benchmark-ips):
 
-**v1.2.0 results** (inline pipeline redesign):
+| Fixture | Size | RedQuilt (i/s) | kramdown (i/s) | RedQuilt vs kramdown |
+|---------|-----:|---------------:|---------------:|---------------------:|
+| short_paragraph | 49 B | 26,543 | 5,846 | 4.54x faster |
+| long_paragraph | 1.4 KB | 1,184 | 932 | 1.27x faster |
+| nested_emphasis | 1.4 KB | 907 | 783 | within error |
+| many_links | 2.0 KB | 1,012 | 734 | 1.38x faster |
+| mixed_markup | 1.8 KB | 950 | 768 | 1.24x faster |
+| deep_nesting | 800 B | 758 | 332 | 2.29x faster |
+| cmark_spec | 205 KB | 33.0 | 28.4 | within error |
 
-| Fixture | i/s | Improvement (v1.0 → v1.2) |
-|---------|-----|--------------------------|
-| Short paragraph | ~25,200 | **3.8x** |
-| Long paragraph | ~1,130 | **30.5x** ✨ |
-| Nested emphasis | ~905 | **10.2x** |
-| Mixed markup | ~885 | **6.6x** |
-| Deep nesting | ~690 | **10.0x** |
-| Many links | ~1,320 | **2.6x** |
+Reproduce locally:
+
+```bash
+bundle exec ruby spec/bench_vs_kramdown.rb
+```
 
 ## License
 
 MIT
-
-## Contributing
-
-Issues and pull requests welcome. See [ast-spec.md](ast-spec.md) for design notes on the Arena AST architecture.
