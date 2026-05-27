@@ -583,8 +583,6 @@ RSpec.describe RedQuilt do
 
     it "sanitizes unsafe URL schemes" do
       # javascript: should be blocked
-      doc = described_class.parse('[link](javascript:alert(1))')
-      link = doc.root.children.first.children.first
       html = described_class.render_html('[link](javascript:alert(1))')
       expect(html).to include('href=""')
 

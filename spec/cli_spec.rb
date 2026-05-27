@@ -34,21 +34,25 @@ RSpec.describe RedQuilt::CLI do
   describe "standalone options" do
     it "uses --title for the document title" do
       code, out, _ = run(["--title", "My Doc"], input: "hi\n")
+      expect(code).to eq(0)
       expect(out).to include("<title>My Doc</title>")
     end
 
     it "derives the title from the first heading with --auto-title" do
       code, out, _ = run(["--auto-title"], input: "# Hello world\n\ntext\n")
+      expect(code).to eq(0)
       expect(out).to include("<title>Hello world</title>")
     end
 
     it "sets the html lang attribute via --lang" do
       code, out, _ = run(["--lang", "ja"], input: "hi\n")
+      expect(code).to eq(0)
       expect(out).to include(%(<html lang="ja">))
     end
 
     it "links a stylesheet via --css" do
       code, out, _ = run(["--css", "/s.css"], input: "hi\n")
+      expect(code).to eq(0)
       expect(out).to include(%(<link rel="stylesheet" href="/s.css">))
     end
   end
