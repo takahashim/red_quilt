@@ -30,7 +30,7 @@ module RedQuilt
 
   class << self
     def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, lint: false)
-      normalized = source.to_s.dup.force_encoding(Encoding::UTF_8)
+      normalized = normalize_input(source)
       arena = Arena.new(normalized)
       block_parser = BlockParser.new(arena)
       root_id = block_parser.parse
@@ -51,6 +51,19 @@ module RedQuilt
             disallow_raw_html: disallow_raw_html,
             extended_autolinks: extended_autolinks,
             lint: lint).to_html
+    end
+
+    private
+
+    NUL_CHAR = 0.chr
+    REPLACEMENT_CHAR = 0xFFFD.chr(Encoding::UTF_8)
+    private_constant :NUL_CHAR, :REPLACEMENT_CHAR
+
+    # CommonMark normalization applied before parsing:
+    # - line endings: \r\n and lone \r -> \n (spec defines all three as line endings)
+    # - NUL (U+0000) -> U+FFFD (spec requires this replacement for security)
+    def normalize_input(source)
+      source.gsub(/\r\n?/, "\n").gsub(NUL_CHAR, REPLACEMENT_CHAR)
     end
   end
 end
