@@ -279,9 +279,10 @@ module RedQuilt
     end
 
     def parse_table(parent_id, lines, index, transformed)
+      # Caller must have verified table_start?(lines, index), which validates
+      # both the delimiter pattern and the header/separator column count match.
       start_index = index
       header_cells = split_table_row(lines[index].content)
-      separator_cells = split_table_row(lines[index + 1].content)
       row_lines = [lines[index]]
       index += 2
       while index < lines.length
@@ -302,7 +303,6 @@ module RedQuilt
         append_table_row(table_id, row_line, split_table_row(row_line.content), false)
       end
 
-      separator_cells
       index
     end
 
@@ -682,8 +682,14 @@ module RedQuilt
       return false if index + 1 >= lines.length
       return false unless table_row?(lines[index].content)
 
+      header_cells = split_table_row(lines[index].content)
       separators = split_table_row(lines[index + 1].content)
       return false if separators.empty?
+
+      # GFM spec: separator row must have valid delimiters AND match header column count.
+      # "The header row must match the delimiter row in the number of cells.
+      #  If not, a table will not be recognized."
+      return false unless header_cells.length == separators.length
 
       separators.all? { |cell| cell.strip.match?(/\A:?-+:?\z/) }
     end

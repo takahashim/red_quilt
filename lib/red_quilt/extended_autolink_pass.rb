@@ -105,7 +105,7 @@ module RedQuilt
         candidate = m[0]
         is_email = (m == email_m)
         trimmed = trim_trailing(candidate, email: is_email)
-        if trimmed.empty?
+        if trimmed.empty? || !valid_domain?(trimmed, email: is_email)
           pos = m.begin(0) + 1
           next
         end
@@ -117,6 +117,32 @@ module RedQuilt
         pos = finish
       end
       matches
+    end
+
+    # GFM spec: "If the domain name contains an underscore (_) in its last two
+    # segments, it is invalid." Applies to both URLs and email domains.
+    def valid_domain?(candidate, email:)
+      domain = extract_domain(candidate, email: email)
+      return false if domain.nil? || domain.empty?
+
+      segments = domain.split(".")
+      return false if segments.length < 2
+
+      last_two = segments.last(2)
+      last_two.none? { |seg| seg.include?("_") }
+    end
+
+    def extract_domain(candidate, email:)
+      if email
+        candidate.split("@", 2)[1]
+      elsif candidate.start_with?("www.")
+        host = candidate[4..]
+        host.split("/", 2).first
+      else
+        # https://, http://, ftp://
+        after_scheme = candidate.sub(%r{\A[a-z]+://}, "")
+        after_scheme.split("/", 2).first
+      end
     end
 
     def first_match(a, b)

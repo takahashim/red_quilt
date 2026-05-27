@@ -88,4 +88,63 @@ RSpec.describe "GFM extended autolinks" do
         .to eq("<p>http://example.com</p>\n")
     end
   end
+
+  describe "domain validation (GFM spec)" do
+    # GFM spec section 6.9: "If the domain name contains an underscore (_)
+    # in its last two segments, it is invalid."
+
+    describe "URLs with underscores in domain" do
+      it "does not linkify URL with underscore in last segment" do
+        out = render("www.foo.bar_baz\n")
+        expect(out).not_to include("<a href=")
+      end
+
+      it "does not linkify URL with underscore in second-to-last segment" do
+        out = render("www.foo_bar.com\n")
+        expect(out).not_to include("<a href=")
+      end
+
+      it "linkifies URL with underscore in earlier (non-last-two) segments" do
+        out = render("www.sub_foo.bar.example.com\n")
+        expect(out).to include(%(<a href="http://www.sub_foo.bar.example.com">))
+      end
+
+      it "does not linkify http URL with underscore in last segment" do
+        out = render("http://foo.bar_baz\n")
+        expect(out).not_to include("<a href=")
+      end
+
+      it "does not linkify https URL with underscore in last two segments" do
+        out = render("https://foo_bar.com\n")
+        expect(out).not_to include("<a href=")
+      end
+
+      it "does not linkify ftp URL with underscore in last segment" do
+        out = render("ftp://foo.bar_baz\n")
+        expect(out).not_to include("<a href=")
+      end
+
+      it "linkifies URLs with underscores beyond last two segments (path included)" do
+        out = render("https://sub_foo.example.com/path\n")
+        expect(out).to include(%(<a href="https://sub_foo.example.com/path">))
+      end
+    end
+
+    describe "email addresses with underscores in domain" do
+      it "does not linkify email with underscore in last segment of domain" do
+        out = render("user@foo.bar_baz\n")
+        expect(out).not_to include("<a href=")
+      end
+
+      it "does not linkify email with underscore in second-to-last segment" do
+        out = render("user@foo_bar.com\n")
+        expect(out).not_to include("<a href=")
+      end
+
+      it "linkifies email with underscore in earlier segments" do
+        out = render("user@sub_foo.example.com\n")
+        expect(out).to include(%(<a href="mailto:user@sub_foo.example.com">))
+      end
+    end
+  end
 end

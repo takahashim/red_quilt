@@ -306,6 +306,219 @@ RSpec.describe RedQuilt do
       expect(html).to include("<td>1</td>")
     end
 
+    describe "table separator validation (GFM spec)" do
+      # GFM spec: "The delimiter row consists of cells whose only content are
+      # hyphens (-), and optionally, a leading or trailing colon (:), or both,
+      # to indicate left, right, or center alignment respectively."
+
+      describe "valid delimiter cell patterns" do
+        it "accepts a single hyphen per cell (minimum requirement)" do
+          source = <<~MD
+            | A | B |
+            | - | - |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+        end
+
+        it "accepts multiple hyphens per cell" do
+          source = <<~MD
+            | A | B |
+            | --- | ---- |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+        end
+
+        it "accepts left alignment marker (:---)" do
+          source = <<~MD
+            | A | B |
+            | :--- | --- |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+        end
+
+        it "accepts right alignment marker (---:)" do
+          source = <<~MD
+            | A | B |
+            | --- | ---: |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+        end
+
+        it "accepts center alignment marker (:---:)" do
+          source = <<~MD
+            | A | B |
+            | :---: | :---: |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+        end
+
+        it "accepts minimum alignment markers with single dash (:-, -:, :-:)" do
+          source = <<~MD
+            | A | B | C |
+            | :- | -: | :-: |
+            | 1 | 2 | 3 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+        end
+
+        it "trims spaces around delimiter cell content" do
+          # GFM: "Spaces between pipes and cell content are trimmed"
+          source = <<~MD
+            | A | B |
+            |  ---  |   :---:   |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+        end
+      end
+
+      describe "invalid delimiter cell patterns" do
+        it "rejects cells containing only colons (no hyphens)" do
+          # GFM requires at least one hyphen in each delimiter cell
+          source = <<~MD
+            | A | B |
+            | : | : |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+          expect(html).to include("<p>")
+        end
+
+        it "rejects cells containing text" do
+          source = <<~MD
+            | A | B |
+            | invalid | separator |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+        end
+
+        it "rejects mixed valid/invalid cells (whole row must be valid)" do
+          # First cell `:` is invalid (no hyphens). Even though `:---` is valid,
+          # the whole row is invalid because all cells must be valid.
+          source = <<~MD
+            | A | B |
+            | : | :--- |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+        end
+
+        it "rejects cells with misplaced colons (between hyphens)" do
+          source = <<~MD
+            | A | B |
+            | -:- | --- |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+        end
+
+        it "rejects cells with multiple leading or trailing colons" do
+          source = <<~MD
+            | A | B |
+            | ::--- | --- |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+        end
+
+        it "rejects empty delimiter cells" do
+          source = <<~MD
+            | A | B |
+            |  |  |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+        end
+      end
+
+      describe "header / delimiter column count match (GFM spec)" do
+        # GFM: "The header row must match the delimiter row in the number of cells.
+        #       If not, a table will not be recognized."
+
+        it "rejects table when header has more columns than delimiter" do
+          source = <<~MD
+            | A | B |
+            | --- |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+        end
+
+        it "rejects table when header has fewer columns than delimiter" do
+          source = <<~MD
+            | A |
+            | --- | --- |
+            | 1 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).not_to include("<table>")
+        end
+
+        it "accepts table when columns match exactly" do
+          source = <<~MD
+            | A | B | C |
+            | --- | --- | --- |
+            | 1 | 2 | 3 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<table>")
+          expect(html).to include("<th>A</th>")
+          expect(html).to include("<th>C</th>")
+        end
+      end
+
+      describe "fallback behavior" do
+        it "renders as paragraph when separator is invalid" do
+          source = <<~MD
+            | A | B |
+            | invalid | separator |
+            | 1 | 2 |
+          MD
+
+          html = described_class.render_html(source)
+          expect(html).to include("<p>| A | B |")
+          expect(html).to include("| invalid | separator |")
+          expect(html).not_to include("<table>")
+        end
+      end
+    end
+
     it "matches Document#to_html" do
       source = "# Head\n\nBody"
       doc = described_class.parse(source)
