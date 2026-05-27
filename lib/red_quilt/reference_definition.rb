@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "cgi"
-
 module RedQuilt
   # CommonMark link reference definitions (`[label]: dest "title"`).
   #
@@ -18,7 +16,17 @@ module RedQuilt
 
     TITLE_CLOSERS = { '"' => '"', "'" => "'", "(" => ")" }.freeze
 
+    # CommonMark spec: "A link label can have at most 999 characters
+    # inside the square brackets." Applies to both reference definitions
+    # and reference link uses.
+    LABEL_MAX_LENGTH = 999
+
     module_function
+
+    # True when `text` exceeds the spec's link-label length limit.
+    def label_too_long?(text)
+      text.to_s.length > LABEL_MAX_LENGTH
+    end
 
     # Attempts to consume a reference definition starting at `lines[index]`.
     # Returns `{ reference: { label:, destination:, title: }, consumed: N,
@@ -35,17 +43,7 @@ module RedQuilt
     # for the info string, which shares the same unescape semantics.
     def unescape_text(text)
       out = text.gsub(/\\([!-\/:-@\[-`{-~])/, "\\1")
-      out.gsub(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/) do |m|
-        if m.start_with?("&#")
-          decoded = CGI.unescapeHTML(m)
-          # CommonMark spec: NULL (U+0000) must be replaced with the
-          # Unicode replacement character (U+FFFD) in decoded entities.
-          decoded.tr("\u0000", "\uFFFD")
-        else
-          encoded = Inline::HTML_ENTITIES[m[1..-2]]
-          encoded ? encoded.dup.force_encoding(Encoding::UTF_8) : m
-        end
-      end
+      out.gsub(Inline::ENTITY_RE) { |m| Inline.decode_entity(m) }
     end
 
     # Spec-required normalization: full Unicode case fold + whitespace
@@ -106,7 +104,10 @@ module RedQuilt
 
       def match_label(text)
         match = REF_DEF_RE.match(text)
-        return [match, 1] if match
+        if match
+          return [nil, nil] if ReferenceDefinition.label_too_long?(match[1])
+          return [match, 1]
+        end
 
         # Multi-line label: accumulate subsequent lines until `]:` is
         # found. Blank lines terminate the attempt.
@@ -120,7 +121,10 @@ module RedQuilt
           accumulated += "\n" + next_line.content
           extra += 1
           m = REF_DEF_RE.match(accumulated)
-          return [m, 1 + extra] if m
+          if m
+            return [nil, nil] if ReferenceDefinition.label_too_long?(m[1])
+            return [m, 1 + extra]
+          end
         end
       end
 
@@ -196,10 +200,40 @@ module RedQuilt
           return [nil, nil]
         end
 
-        match = /\A(\S+)(.*)\z/m.match(source)
-        return [nil, nil] unless match
+        parse_raw_destination(source)
+      end
 
-        [match[1], match[2].to_s]
+      # Raw destination per CommonMark 6.3: no ASCII control chars or
+      # space; parentheses must be balanced or backslash-escaped. Mirrors
+      # the inline-link logic in Inline::Builder#parse_raw_destination
+      # so a reference definition is not more permissive than an inline
+      # link destination.
+      RAW_DEST_FORBIDDEN_RE = /[\u0000-\u0020\u007F]/
+      ASCII_PUNCT_RE = /[!-\/:-@\[-`{-~]/
+
+      def parse_raw_destination(source)
+        depth = 0
+        i = 0
+        len = source.length
+        while i < len
+          c = source[i]
+          if c == "\\" && i + 1 < len && ASCII_PUNCT_RE.match?(source[i + 1])
+            i += 2
+            next
+          end
+          break if RAW_DEST_FORBIDDEN_RE.match?(c)
+          if c == "("
+            depth += 1
+          elsif c == ")"
+            break if depth.zero?
+            depth -= 1
+          end
+          i += 1
+        end
+
+        return [nil, nil] if i.zero?
+        return [nil, nil] unless depth.zero?
+        [source[0...i], source[i..].to_s]
       end
 
       def title_needs_more_lines?(text)

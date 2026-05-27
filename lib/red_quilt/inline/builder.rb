@@ -619,6 +619,7 @@ end
         label_start = @tokens.end_byte(opener.token_id)
         label_end = @tokens.start_byte(rbracket_token_id)
         text_label = @source.byteslice(label_start, label_end - label_start).to_s
+        return nil if ReferenceDefinition.label_too_long?(text_label)
 
         if start_byte < @source.bytesize && @source.getbyte(start_byte) == 0x5B
           ref_label, after_byte = read_reference_label(start_byte)
@@ -659,7 +660,9 @@ end
         while i < @source.bytesize
           b = @source.getbyte(i)
           if b == 0x5D
-            return [@source.byteslice(start_byte + 1, i - start_byte - 1).to_s, i + 1]
+            label = @source.byteslice(start_byte + 1, i - start_byte - 1).to_s
+            return NIL_PAIR if ReferenceDefinition.label_too_long?(label)
+            return [label, i + 1]
           elsif b == 0x5B
             # An unescaped `[` inside a reference label voids the form.
             return NIL_PAIR
