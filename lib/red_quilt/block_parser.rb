@@ -646,8 +646,10 @@ module RedQuilt
 
       stripped = i.zero? ? text : text[i..]
 
-      # Type 1: <script|pre|style|textarea (case-insensitive) followed by whitespace or >
-      return 1 if stripped.match?(%r{\A<(script|pre|style|textarea)(?:\s|>|$)}i)
+      # Type 1: <script|pre|style|textarea (case-insensitive) followed by
+      # space/tab/end-of-line or `>`. CommonMark restricts the separator
+      # to space, tab, or a line ending (not any whitespace class).
+      return 1 if stripped.match?(%r{\A<(script|pre|style|textarea)(?:[ \t]|>|$)}i)
 
       # Type 2: <!--
       return 2 if stripped.start_with?("<!--")
@@ -679,7 +681,7 @@ module RedQuilt
       tfoot th thead title tr track ul
     ].freeze
     HTML_BLOCK_TYPE_6_RE =
-      %r{\A</?(?:#{HTML_BLOCK_TYPE_6_NAMES.join('|')})(?:\s|>|/>|\z)}i
+      %r{\A</?(?:#{HTML_BLOCK_TYPE_6_NAMES.join('|')})(?:[ \t]|>|/>|\z)}i
 
     def table_start?(lines, index)
       return false if index + 1 >= lines.length
@@ -710,14 +712,18 @@ module RedQuilt
 
     # Type 7: a complete open or closing tag on its own line.
     # Closing tags must not have attributes.
+    #
+    # HTML tag separators per CommonMark 6.6 are space, tab, or up to one
+    # line ending -- not the broader \s class (which would include form
+    # feed and vertical tab).
     HTML_TYPE_7_OPEN_TAG_RE = %r{
       \A
       <[A-Za-z][A-Za-z0-9-]*
-      (?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'=<>`]+))?)*
-      \s*/?>
+      (?:[ \t\r\n]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t\r\n]*=[ \t\r\n]*(?:"[^"\n]*"|'[^'\n]*'|[^ \t\r\n"'=<>`]+))?)*
+      [ \t\r\n]*/?>
       \z
     }x
-    HTML_TYPE_7_CLOSING_TAG_RE = %r{\A</[A-Za-z][A-Za-z0-9-]*\s*>\z}
+    HTML_TYPE_7_CLOSING_TAG_RE = %r{\A</[A-Za-z][A-Za-z0-9-]*[ \t\r\n]*>\z}
 
     def valid_html_tag?(text)
       # Fast reject: every type-7 tag must begin with `<`.

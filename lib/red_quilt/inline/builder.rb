@@ -360,7 +360,7 @@ module RedQuilt
 
         raw_dest = nil
         next_byte = byte_at(pos)
-        if next_byte && next_byte != 0x29 && !ascii_whitespace_byte?(next_byte) && next_byte != 0x0A
+        if next_byte && next_byte != 0x29 && !link_tail_whitespace_byte?(next_byte) && next_byte != 0x0A
           dest_result = parse_link_destination(pos)
           return nil unless dest_result
           raw_dest, pos = dest_result
@@ -403,7 +403,7 @@ module RedQuilt
           if b == 0x0A
             newlines += 1
             return nil if newlines > 1
-          elsif !ascii_whitespace_byte?(b)
+          elsif !link_tail_whitespace_byte?(b)
             break
           end
           pos += 1
@@ -469,7 +469,7 @@ module RedQuilt
             next
           end
 
-          break if ascii_whitespace_byte?(b) || b < 0x20 || b == 0x7F
+          break if link_tail_whitespace_byte?(b) || b < 0x20 || b == 0x7F
 
           if b == 0x28
             depth += 1
@@ -585,8 +585,13 @@ end
         @source.getbyte(pos)
       end
 
-      def ascii_whitespace_byte?(b)
-        b == 0x20 || b == 0x09 || b == 0x0D || b == 0x0C || b == 0x0B
+      # Whitespace allowed as a link-tail separator per CommonMark 6.3:
+      # "spaces, tabs, and up to one line ending". Line endings are
+      # counted by the caller, so this predicate intentionally matches
+      # only space and tab -- it must NOT match form feed (U+000C) or
+      # vertical tab (U+000B) the way the generic \s class does.
+      def link_tail_whitespace_byte?(b)
+        b == 0x20 || b == 0x09
       end
 
       # ASCII punctuation per CommonMark (used for backslash escape).

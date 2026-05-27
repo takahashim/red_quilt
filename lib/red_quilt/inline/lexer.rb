@@ -30,13 +30,20 @@ module RedQuilt
       # Anchored regexes for StringScanner#scan (still used by
       # scan_angle / scan_amp). StringScanner anchors at the current pos,
       # so no `\G` is needed.
-      URI_AUTOLINK_RE = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020]*)>/
+      #
+      # URI autolink rejects every ASCII control char (U+0000-U+001F, U+007F)
+      # plus space (U+0020); CommonMark 6.5 forbids ASCII control characters,
+      # space, <, or >.
+      URI_AUTOLINK_RE = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\u0000-\u0020\u007F]*)>/
       EMAIL_AUTOLINK_RE = /<([a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/
       # CommonMark spec 6.6 "Raw HTML": six forms — open tag, closing tag,
       # HTML comment, processing instruction, declaration, CDATA section.
       # Attribute values are allowed to span lines.
-      HTML_OPEN_TAG_RE = %r{<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*/?>}
-      HTML_CLOSING_TAG_RE = %r{</[A-Za-z][A-Za-z0-9-]*\s*>}
+      # HTML tag separators are restricted to space/tab/CR/LF per spec --
+      # \s would also match form feed (U+000C) and vertical tab (U+000B),
+      # which CommonMark disallows.
+      HTML_OPEN_TAG_RE = %r{<[A-Za-z][A-Za-z0-9-]*(?:[ \t\r\n]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t\r\n]*=[ \t\r\n]*(?:"[^"]*"|'[^']*'|[^ \t\r\n"'=<>`]+))?)*[ \t\r\n]*/?>}
+      HTML_CLOSING_TAG_RE = %r{</[A-Za-z][A-Za-z0-9-]*[ \t\r\n]*>}
       # Comment: `<!-->`, `<!--->`, or `<!-- text -->` where text doesn't
       # start with `>` or `->`, end with `-`, or contain `--`.
       HTML_COMMENT_RE = %r{<!-->|<!--->|<!--(?!>)(?!->)[\s\S]*?(?<!-)-->}
