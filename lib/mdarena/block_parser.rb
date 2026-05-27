@@ -441,9 +441,6 @@ module Mdarena
       false
     end
 
-    # Strips up to `max` leading 0x20 bytes from `text`. Returns the
-    # original string when nothing changed, so callers avoid an
-    # allocation in the common no-indent case.
     # Bytes of literal leading 0x20 / 0x09 in `text`.
     def leading_ws_bytes(text)
       i = 0
@@ -456,6 +453,9 @@ module Mdarena
       i
     end
 
+    # Strips up to `max` leading 0x20 bytes from `text`. Returns the
+    # original string when nothing changed, so callers avoid an
+    # allocation in the common no-indent case.
     def strip_leading_spaces(text, max)
       return text if max <= 0
       bytes = text.bytesize

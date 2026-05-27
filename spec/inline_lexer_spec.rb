@@ -14,9 +14,6 @@ RSpec.describe Mdarena::Inline::Lexer do
       result = lexer.lex_into(tokens, 0, source.bytesize)
       expect(result).to equal(tokens)
     end
-
-    # Token-emission behavior is verified in dedicated specs added by the
-    # upcoming commits (TEXT / LINE_ENDING / DELIM_RUN / ...).
   end
 
   def lex(source, range_start: 0, range_end: nil)
