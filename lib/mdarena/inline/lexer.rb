@@ -73,49 +73,71 @@ module Mdarena
       private
 
       def scan(tokens)
-        while @ss.pos < @end
-          byte = @source.getbyte(@ss.pos)
+        # Hot loop. Cache @ss.pos / @end into locals to avoid per-iter
+        # StringScanner / ivar reads, and inline the plain-text branch
+        # (the most common one) so we save a `scan_text` method call
+        # per text run.
+        pos = @ss.pos
+        end_pos = @end
+        while pos < end_pos
+          byte = @source.getbyte(pos)
           case byte
           when 0x0A # \n
+            @ss.pos = pos
             scan_line_ending(tokens)
+            pos = @ss.pos
           when 0x5C # \\ (backslash)
+            @ss.pos = pos
             scan_backslash(tokens)
+            pos = @ss.pos
           when 0x60 # `
+            @ss.pos = pos
             scan_code_delimiter(tokens)
+            pos = @ss.pos
           when 0x2A # *
+            @ss.pos = pos
             scan_delim_run(tokens, ASTERISK_RUN_RE, "*", 0x2A)
+            pos = @ss.pos
           when 0x5F # _
+            @ss.pos = pos
             scan_delim_run(tokens, UNDERSCORE_RUN_RE, "_", 0x5F)
+            pos = @ss.pos
           when 0x7E # ~ (GFM strikethrough)
+            @ss.pos = pos
             scan_delim_run(tokens, TILDE_RUN_RE, "~", 0x7E)
+            pos = @ss.pos
           when 0x5B # [
-            scan_one_byte_token(tokens, TokenKind::LBRACKET)
+            tokens.emit(TokenKind::LBRACKET, start_byte: pos, end_byte: pos + 1)
+            pos += 1
           when 0x5D # ]
-            scan_one_byte_token(tokens, TokenKind::RBRACKET)
+            tokens.emit(TokenKind::RBRACKET, start_byte: pos, end_byte: pos + 1)
+            pos += 1
           when 0x21 # !
+            @ss.pos = pos
             scan_bang(tokens)
+            pos = @ss.pos
           when 0x3C # <
+            @ss.pos = pos
             scan_angle(tokens)
+            pos = @ss.pos
           when 0x26 # &
+            @ss.pos = pos
             scan_amp(tokens)
+            pos = @ss.pos
           else
-            scan_text(tokens)
+            # Inlined scan_text. Always make progress: consume the
+            # current byte, then byteindex against the binary view to
+            # leap to the next special byte at C speed.
+            start = pos
+            pos += 1
+            if pos < end_pos
+              next_special = @source_b.byteindex(SPECIAL_BYTE_RE, pos)
+              pos = (next_special.nil? || next_special >= end_pos) ? end_pos : next_special
+            end
+            tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: pos)
           end
         end
-      end
-
-      def scan_text(tokens)
-        start = @ss.pos
-        # Always make progress: consume the current byte even if it's a
-        # "special" byte that fell through to scan_text (e.g. a `&` that
-        # didn't match ENTITY_RE). Then use byteindex against the binary
-        # view to leap to the next special byte at C speed.
-        @ss.pos += 1 if @ss.pos < @end
-        if @ss.pos < @end
-          next_special = @source_b.byteindex(SPECIAL_BYTE_RE, @ss.pos)
-          @ss.pos = (next_special.nil? || next_special >= @end) ? @end : next_special
-        end
-        tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: @ss.pos) if @ss.pos > start
+        @ss.pos = pos
       end
 
       def scan_line_ending(tokens)
@@ -198,12 +220,6 @@ module Mdarena
         tokens.emit(TokenKind::DELIM_RUN,
                     start_byte: start, end_byte: @ss.pos,
                     int1: byte, int2: count, int3: flags)
-      end
-
-      def scan_one_byte_token(tokens, kind)
-        start = @ss.pos
-        @ss.pos += 1
-        tokens.emit(kind, start_byte: start, end_byte: @ss.pos)
       end
 
       def scan_bang(tokens)
