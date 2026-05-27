@@ -95,6 +95,7 @@ module RedQuilt
 
       def update_arena_span(node_id, start_byte, end_byte)
         return unless @track_source
+
         @arena.update_span(node_id, start_byte, end_byte)
       end
 
@@ -206,7 +207,7 @@ module RedQuilt
         end
 
         @arena.append_child(@parent_id,
-          add_arena_node(kind, start_byte, end_byte, str1: "\n"))
+                            add_arena_node(kind, start_byte, end_byte, str1: "\n"))
       end
 
       def strip_trailing_spaces(count)
@@ -220,6 +221,7 @@ module RedQuilt
         end
 
         return unless @track_source
+
         new_len = @arena.source_len(last) - count
         new_len = 0 if new_len.negative?
         @arena.update_span(last,
@@ -263,6 +265,7 @@ module RedQuilt
         while pos < bytesize
           run_start = @source_b.byteindex(BACKTICK_BYTE, pos)
           break if run_start.nil?
+
           pos = run_start + 1
           pos += 1 while pos < bytesize && @source_b.getbyte(pos) == 0x60
           if pos - run_start == run_len
@@ -361,6 +364,7 @@ module RedQuilt
         if next_byte && next_byte != 0x29 && !link_tail_whitespace_byte?(next_byte) && next_byte != 0x0A
           dest_result = parse_link_destination(pos)
           return nil unless dest_result
+
           raw_dest, pos = dest_result
         end
 
@@ -373,6 +377,7 @@ module RedQuilt
           if opener_byte && (opener_byte == 0x22 || opener_byte == 0x27 || opener_byte == 0x28)
             title_result = parse_link_title(ws_end)
             return nil unless title_result
+
             raw_title, pos = title_result
             pos = skip_link_whitespace(pos)
             return nil if pos.nil?
@@ -473,6 +478,7 @@ module RedQuilt
             depth += 1
           elsif b == 0x29
             break if depth.zero?
+
             depth -= 1
           end
 
@@ -482,6 +488,7 @@ module RedQuilt
 
         return nil if pos == start_byte
         return nil if depth != 0
+
         [result, pos]
       end
 
@@ -521,6 +528,7 @@ module RedQuilt
               look += 1
             end
             return nil if look < @source.bytesize && @source.getbyte(look) == 0x0A
+
             result << b
             pos += 1
             next
@@ -566,12 +574,13 @@ module RedQuilt
         result
       end
 
-def decode_link_entities(raw)
-  raw.gsub(Inline::ENTITY_RE) { |m| Inline.decode_entity(m) }
-end
+      def decode_link_entities(raw)
+        raw.gsub(Inline::ENTITY_RE) { |m| Inline.decode_entity(m) }
+      end
 
       def byte_at(pos)
         return nil if pos < 0 || pos >= @source.bytesize
+
         @source.getbyte(pos)
       end
 
@@ -602,6 +611,7 @@ end
         return true if b >= 0x30 && b <= 0x39
         return true if b >= 0x41 && b <= 0x5A
         return true if b >= 0x61 && b <= 0x7A
+
         URL_SAFE_BYTE[b]
       end
 
@@ -614,6 +624,7 @@ end
         if start_byte < @source.bytesize && @source.getbyte(start_byte) == 0x5B
           ref_label, after_byte = read_reference_label(start_byte)
           return nil unless after_byte
+
           lookup = ref_label.empty? ? text_label : ref_label
           normalized = ReferenceDefinition.normalize_label(lookup)
           ref = @references[normalized]
@@ -636,6 +647,7 @@ end
 
         ref = @references[ReferenceDefinition.normalize_label(text_label)]
         return nil unless ref
+
         {
           end_byte: start_byte,
           destination: normalize_link_uri(ref[:destination].to_s),
@@ -652,6 +664,7 @@ end
           if b == 0x5D
             label = @source.byteslice(start_byte + 1, i - start_byte - 1).to_s
             return NIL_PAIR if ReferenceDefinition.label_too_long?(label)
+
             return [label, i + 1]
           elsif b == 0x5B
             # An unescaped `[` inside a reference label voids the form.
@@ -711,6 +724,7 @@ end
             append_text(byte_offset, e, nil)
             return id + 1
           end
+
           id += 1
         end
         last
@@ -734,6 +748,7 @@ end
 
       def report_diagnostic(severity:, rule:, message:, source_span: nil)
         return unless @diagnostics
+
         @diagnostics << Diagnostic.new(
           severity: severity, rule: rule, message: message, source_span: source_span
         )

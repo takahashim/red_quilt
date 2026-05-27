@@ -117,6 +117,7 @@ module RedQuilt
         i += 1
       end
       return false if i >= bytes
+
       first = content.getbyte(i)
       # 4+ leading spaces? Treat as indented code candidate.
       return false if i == 3 && first == 0x20
@@ -124,6 +125,7 @@ module RedQuilt
       return false if BLOCK_START_BYTES[first]
       # Table rows always contain `|`; quick C-level scan covers them.
       return false if content.include?("|")
+
       true
     end
 
@@ -135,6 +137,7 @@ module RedQuilt
       return false if html_block_start?(content)
       return false if List.match(content)
       return false if Blockquote.match?(content)
+
       true
     end
 
@@ -156,6 +159,7 @@ module RedQuilt
         return true
       end
       return true if table_start?(lines, index)
+
       false
     end
 
@@ -254,6 +258,7 @@ module RedQuilt
           line = lines[index].content
           haystack = case_insensitive ? line.downcase : line
           return index if haystack.include?(terminator)
+
           index += 1
         end
         lines.length - 1
@@ -361,6 +366,7 @@ module RedQuilt
         if !line.lazy && index > start_index && paragraph_interrupt?(lines, index)
           break
         end
+
         # NOTE: Per CommonMark, a `[label]: ...` line cannot start a
         # link reference definition inside an open paragraph — it's
         # absorbed as paragraph continuation. The dispatch in
@@ -417,6 +423,7 @@ module RedQuilt
     def setext_underline_level(text)
       match = /\A {0,3}(=+|-+)[ \t]*\z/.match(text)
       return nil unless match
+
       match[1].start_with?("=") ? 1 : 2
     end
 
@@ -436,6 +443,7 @@ module RedQuilt
         return true
       end
       return true if table_start?(lines, index)
+
       false
     end
 
@@ -446,6 +454,7 @@ module RedQuilt
       while i < bytes
         b = text.getbyte(i)
         break unless b == 0x20 || b == 0x09
+
         i += 1
       end
       i
@@ -456,12 +465,14 @@ module RedQuilt
     # allocation in the common no-indent case.
     def strip_leading_spaces(text, max)
       return text if max <= 0
+
       bytes = text.bytesize
       i = 0
       while i < max && i < bytes && text.getbyte(i) == 0x20
         i += 1
       end
       return text if i.zero?
+
       text.byteslice(i..)
     end
 
@@ -474,9 +485,11 @@ module RedQuilt
       while i < bytes
         b = text.getbyte(i)
         break unless b == 0x20 || b == 0x09
+
         i += 1
       end
       return text if i.zero?
+
       text.byteslice(i..)
     end
 
@@ -564,9 +577,11 @@ module RedQuilt
         i += 1
       end
       return false if i - fence_start < count
+
       while i < bytes
         b = text.getbyte(i)
         return false unless b == 0x20 || b == 0x09
+
         i += 1
       end
       true
@@ -604,6 +619,7 @@ module RedQuilt
     # regardless of where they land relative to the original tab stops.
     def strip_columns(text, n)
       return text if n <= 0
+
       col = 0
       i = 0
       bytes = text.bytesize
@@ -630,6 +646,7 @@ module RedQuilt
     def html_block_start?(text)
       # Indented code block takes precedence (4+ spaces)
       return false if text.start_with?("    ")
+
       !html_block_type(text).nil?
     end
 
@@ -728,6 +745,7 @@ module RedQuilt
     def valid_html_tag?(text)
       # Fast reject: every type-7 tag must begin with `<`.
       return false unless text.start_with?("<")
+
       HTML_TYPE_7_OPEN_TAG_RE.match?(text) || HTML_TYPE_7_CLOSING_TAG_RE.match?(text)
     end
 

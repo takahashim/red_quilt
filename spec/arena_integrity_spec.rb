@@ -28,7 +28,6 @@ RSpec.describe RedQuilt::Arena do
     end
 
     it "passes on every parsed CommonMark example we already cover" do
-      examples = JSON.parse(File.read(File.expand_path('../tmp_cmark_spec.json', __dir__))) if false
       # Inline a few diverse samples instead of pulling the spec file.
       [
         "# Heading\n",
@@ -43,7 +42,7 @@ RSpec.describe RedQuilt::Arena do
       ].each do |md|
         doc = RedQuilt.parse(md)
         expect { doc.arena.check_integrity!(doc.root_id) }.not_to raise_error,
-          "integrity violation on #{md.inspect}"
+                                                                  "integrity violation on #{md.inspect}"
       end
     end
 

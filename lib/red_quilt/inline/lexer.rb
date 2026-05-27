@@ -261,6 +261,7 @@ module RedQuilt
         before = @ss.pos
         matched = @ss.scan(regex)
         return nil unless matched
+
         if @ss.pos > @end
           @ss.pos = before
           return nil

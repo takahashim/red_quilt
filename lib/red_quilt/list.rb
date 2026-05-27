@@ -78,6 +78,7 @@ module RedQuilt
     def interrupts_paragraph?(li_match)
       return false if li_match[:content].empty?
       return false if li_match[:ordered] && li_match[:start_number] != 1
+
       true
     end
 
@@ -152,6 +153,7 @@ module RedQuilt
           # Thematic break beats list-item continuation per CommonMark:
           # a line like `* * *` ends the list and starts an <hr />.
           break if @block_parser.__send__(:thematic_break?, lines[index].content)
+
           match = List.match(lines[index].content)
           break unless match
           break unless List.same_group?(first_match, match)

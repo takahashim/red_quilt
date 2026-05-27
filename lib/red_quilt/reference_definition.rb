@@ -106,6 +106,7 @@ module RedQuilt
         match = REF_DEF_RE.match(text)
         if match
           return [nil, nil] if ReferenceDefinition.label_too_long?(match[1])
+
           return [match, 1]
         end
 
@@ -116,15 +117,17 @@ module RedQuilt
         loop do
           probe = @index + 1 + extra
           return [nil, nil] if probe >= @lines.length
+
           next_line = @lines[probe]
           return [nil, nil] if next_line.blank
+
           accumulated += "\n" + next_line.content
           extra += 1
           m = REF_DEF_RE.match(accumulated)
-          if m
-            return [nil, nil] if ReferenceDefinition.label_too_long?(m[1])
-            return [m, 1 + extra]
-          end
+          next unless m
+          return [nil, nil] if ReferenceDefinition.label_too_long?(m[1])
+
+          return [m, 1 + extra]
         end
       end
 
@@ -222,10 +225,12 @@ module RedQuilt
             next
           end
           break if RAW_DEST_FORBIDDEN_RE.match?(c)
+
           if c == "("
             depth += 1
           elsif c == ")"
             break if depth.zero?
+
             depth -= 1
           end
           i += 1
@@ -233,6 +238,7 @@ module RedQuilt
 
         return [nil, nil] if i.zero?
         return [nil, nil] unless depth.zero?
+
         [source[0...i], source[i..].to_s]
       end
 

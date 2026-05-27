@@ -111,10 +111,12 @@ module RedQuilt
       if @arena.type(node_id) == NodeType::HEADING
         return PlainText.from(@arena, node_id)
       end
+
       child = @arena.raw_first_child_id(node_id)
       while child != -1
         text = first_heading_text_walk(child)
         return text if text
+
         child = @arena.raw_next_sibling_id(child)
       end
       nil

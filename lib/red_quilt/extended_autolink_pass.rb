@@ -48,6 +48,7 @@ module RedQuilt
 
     def walk(node_id)
       return if node_id == -1
+
       type = @arena.type(node_id)
       return if SKIP_TYPES.include?(type)
 
@@ -78,17 +79,17 @@ module RedQuilt
       matches.each do |m|
         if m.start > prev_end
           @arena.insert_before(parent, node_id,
-            @arena.add_node(NodeType::TEXT, str1: text[prev_end...m.start]))
+                               @arena.add_node(NodeType::TEXT, str1: text[prev_end...m.start]))
         end
         link_id = @arena.add_node(NodeType::LINK, str1: m.dest)
         @arena.append_child(link_id,
-          @arena.add_node(NodeType::TEXT, str1: m.label))
+                            @arena.add_node(NodeType::TEXT, str1: m.label))
         @arena.insert_before(parent, node_id, link_id)
         prev_end = m.finish
       end
       if prev_end < text.length
         @arena.insert_before(parent, node_id,
-          @arena.add_node(NodeType::TEXT, str1: text[prev_end..]))
+                             @arena.add_node(NodeType::TEXT, str1: text[prev_end..]))
       end
       @arena.detach(node_id)
     end
@@ -148,6 +149,7 @@ module RedQuilt
     def first_match(a, b)
       return b unless a
       return a unless b
+
       a.begin(0) <= b.begin(0) ? a : b
     end
 
@@ -176,6 +178,7 @@ module RedQuilt
     def build_destination(label, email:)
       return "mailto:#{label}" if email
       return "http://#{label}" if label.start_with?("www.")
+
       label
     end
   end

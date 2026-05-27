@@ -158,6 +158,7 @@ module RedQuilt
       loop do
         @parent[id] = new_parent_id
         break if id == last_id
+
         id = @next_sibling[id]
       end
 
@@ -320,6 +321,7 @@ module RedQuilt
       if visited[id]
         raise IntegrityError, "node #{id} reached twice (cycle or shared subtree)"
       end
+
       visited[id] = true
 
       actual_parent = @parent[id]

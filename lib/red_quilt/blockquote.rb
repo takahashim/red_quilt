@@ -119,6 +119,7 @@ module RedQuilt
           else
             break
           end
+
           index += 1
         end
 
@@ -144,6 +145,7 @@ module RedQuilt
           if Blockquote.match?(c)
             m = /\A {0,3}> ?/.match(c)
             break unless m
+
             c = c[m[0].length..]
             return false if c.strip.empty?
           elsif (li = List.match(c))

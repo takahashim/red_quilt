@@ -44,10 +44,10 @@ module RedQuilt
       return 1 unless source
 
       doc = RedQuilt.parse(source,
-                          allow_html: options[:allow_html],
-                          disallow_raw_html: options[:disallow_raw_html],
-                          extended_autolinks: options[:extended_autolinks],
-                          lint: options[:lint])
+                           allow_html: options[:allow_html],
+                           disallow_raw_html: options[:disallow_raw_html],
+                           extended_autolinks: options[:extended_autolinks],
+                           lint: options[:lint])
 
       unless options[:diagnostics_only]
         case options[:format]
