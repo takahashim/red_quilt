@@ -619,7 +619,7 @@ end
           ref_label, after_byte = read_reference_label(start_byte)
           return nil unless after_byte
           lookup = ref_label.empty? ? text_label : ref_label
-          normalized = normalize_reference_label(lookup)
+          normalized = ReferenceDefinition.normalize_label(lookup)
           ref = @references[normalized]
           unless ref
             # Full reference `[text][ref]` with a missing definition is
@@ -638,7 +638,7 @@ end
           }
         end
 
-        ref = @references[normalize_reference_label(text_label)]
+        ref = @references[ReferenceDefinition.normalize_label(text_label)]
         return nil unless ref
         {
           end_byte: start_byte,
@@ -739,12 +739,6 @@ end
         @diagnostics << Diagnostic.new(
           severity: severity, rule: rule, message: message, source_span: source_span
         )
-      end
-
-      def normalize_reference_label(label)
-        # CommonMark spec: full Unicode case fold so labels like `ẞ`
-        # match definitions of `SS` (the case-fold of `ẞ` is `ss`).
-        label.to_s.strip.downcase(:fold).gsub(/[ \t\r\n]+/, " ")
       end
 
       # --------------------------- delim runs / emphasis ------------------

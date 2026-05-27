@@ -36,8 +36,6 @@ module Mdarena
       a.freeze
     end
 
-    TITLE_CLOSERS = { '"' => '"', "'" => "'", "(" => ")" }.freeze
-
     # parse_lines returns true if it encountered a blank line BETWEEN
     # two block-level constructs at this scope. parse_list uses that to
     # decide an item's looseness — the spec says an item is loose when
@@ -81,7 +79,7 @@ module Mdarena
         elsif thematic_break?(content)
           @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: span_len(line)))
           index += 1
-        elsif (reference = link_reference_definition(lines, index))
+        elsif (reference = ReferenceDefinition.consume(lines, index))
           store_reference(reference[:reference])
           index += reference[:consumed]
         elsif table_start?(lines, index)
@@ -964,7 +962,7 @@ module Mdarena
       {
         char: match[2][0],
         count: match[2].length,
-        info: unescape_reference_text(info),
+        info: ReferenceDefinition.unescape_text(info),
         indent: match[1].length
       }
     end
@@ -1140,208 +1138,6 @@ module Mdarena
       HTML_TYPE_7_OPEN_TAG_RE.match?(text) || HTML_TYPE_7_CLOSING_TAG_RE.match?(text)
     end
 
-    # A reference label may contain `\[` / `\]` (backslash-escaped),
-    # but never an unescaped `[` or `]`. Newlines inside the label are
-    # allowed and collapsed by normalize_reference_label.
-    REF_DEF_RE = /\A {0,3}\[((?:[^\\\[\]]|\\.)+)\]:(.*)\z/m.freeze
-
-    def link_reference_definition(lines, index)
-      text = lines[index].content
-      return unless text.match?(/\A {0,3}\[/)
-
-      # Fast path: complete `[label]:` on a single line.
-      match = REF_DEF_RE.match(text)
-      if match
-        consumed = 1
-        label = normalize_reference_label(match[1])
-        return if label.empty?
-        remainder = match[2].to_s
-      else
-        # Multi-line label: accumulate subsequent lines until `]:` is
-        # found. Blank lines terminate the attempt.
-        accumulated = text
-        extra = 0
-        loop do
-          probe = index + 1 + extra
-          break if probe >= lines.length
-          next_line = lines[probe]
-          break if next_line.blank
-          accumulated += "\n" + next_line.content
-          extra += 1
-          m = REF_DEF_RE.match(accumulated)
-          if m
-            match = m
-            break
-          end
-        end
-        return unless match
-        consumed = 1 + extra
-        label = normalize_reference_label(match[1])
-        return if label.empty?
-        remainder = match[2].to_s
-      end
-
-      chunks = [remainder]
-      if remainder.strip.empty?
-        return unless index + consumed < lines.length
-
-        next_line = lines[index + consumed]
-        return if next_line.blank
-
-        chunks << next_line.content
-        consumed += 1
-      end
-
-      destination, rest = parse_reference_destination(chunks.shift.to_s)
-      if destination.nil?
-        destination, rest = parse_reference_destination(chunks.first.to_s)
-        return unless destination
-
-        chunks.shift
-      end
-
-      title_source = rest.to_s
-      consumed_before_title = consumed
-      title_on_separate_line = false
-      if title_source.strip.empty? && index + consumed < lines.length
-        next_line = lines[index + consumed]
-        if next_line && potential_reference_title_start?(next_line.content)
-          title_source = next_line.content
-          consumed += 1
-          title_on_separate_line = true
-        end
-      end
-
-      while index + consumed < lines.length && title_needs_more_lines?(title_source)
-        next_line = lines[index + consumed]
-        break if next_line.blank
-
-        title_source = title_source.empty? ? next_line.content : "#{title_source}\n#{next_line.content}"
-        consumed += 1
-      end
-
-      title, trailing = parse_reference_title(title_source)
-      if trailing && trailing.match?(/\S/)
-        # Title parse failed with garbage after the closer.
-        if title_on_separate_line
-          # The title was pulled from a follow-up line; back off so
-          # that line is reparsed as ordinary content and the def is
-          # still accepted (sans title).
-          consumed = consumed_before_title
-          title = nil
-        else
-          # Title was on the destination line itself; the whole def
-          # is invalid.
-          return
-        end
-      end
-
-      {
-        reference: {
-          label: label,
-          destination: unescape_reference_text(strip_angle_brackets(destination)),
-          title: title
-        },
-        consumed: consumed
-      }
-    end
-
-    def normalize_reference_label(label)
-      # CommonMark spec: full Unicode case fold (`downcase(:fold)`),
-      # not the default per-codepoint lowercase. This makes labels like
-      # `ẞ` (U+1E9E) match a definition of `SS` because the case-fold
-      # of `ẞ` is `ss`.
-      label.to_s.strip.downcase(:fold).gsub(/[ \t\r\n]+/, " ")
-    end
-
-    def strip_angle_brackets(destination)
-      destination.start_with?("<") && destination.end_with?(">") ? destination[1...-1] : destination
-    end
-
-    def parse_reference_destination(text)
-      source = text.to_s.lstrip
-      return [nil, nil] if source.empty?
-
-      if source.start_with?("<")
-        close = source.index(">")
-        if close
-          tail = source[(close + 1)..].to_s
-          if tail.empty? || tail.match?(/\A[ \t\r\n]/)
-            return [source[0..close], tail]
-          end
-        end
-        # Raw destinations cannot start with `<`, so once the angle
-        # form fails there is no fallback.
-        return [nil, nil]
-      end
-
-      match = /\A(\S+)(.*)\z/m.match(source)
-      return [nil, nil] unless match
-
-      [match[1], match[2].to_s]
-    end
-
-    def title_needs_more_lines?(text)
-      stripped = text.to_s.lstrip
-      return false if stripped.empty?
-
-      quote = stripped[0]
-      closer = reference_title_closer(quote)
-      return false unless closer
-      return false if stripped.length > 1 && stripped.end_with?(closer)
-
-      true
-    end
-
-    def potential_reference_title_start?(text)
-      %w[" ' (].include?(text.to_s.lstrip[0])
-    end
-
-    def parse_reference_title(text)
-      stripped = text.to_s.lstrip
-      return [nil, stripped] if stripped.empty?
-
-      opener = stripped[0]
-      closer = reference_title_closer(opener)
-      return [nil, stripped] unless closer
-
-      body = +""
-      escaped = false
-      index = 1
-      while index < stripped.length
-        char = stripped[index]
-        if char == "\\" && !escaped
-          escaped = true
-          body << char
-        elsif char == closer && !escaped
-          trailing = stripped[(index + 1)..].to_s
-          return [unescape_reference_text(body), trailing]
-        else
-          body << char
-          escaped = false
-        end
-        index += 1
-      end
-
-      [nil, stripped]
-    end
-
-    def reference_title_closer(opener)
-      TITLE_CLOSERS[opener]
-    end
-
-    def unescape_reference_text(text)
-      out = text.gsub(/\\([!-\/:-@\[-`{-~])/, "\\1")
-      out.gsub(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#[xX][0-9A-Fa-f]+);/) do |m|
-        if m.start_with?("&#")
-          decoded = CGI.unescapeHTML(m)
-          decoded.tr("\u0000", "\uFFFD")
-        else
-          encoded = Inline::HTML_ENTITIES[m[1..-2]]
-          encoded ? encoded.dup.force_encoding(Encoding::UTF_8) : m
-        end
-      end
-    end
 
     def store_reference(reference)
       @references[reference[:label]] ||= {
