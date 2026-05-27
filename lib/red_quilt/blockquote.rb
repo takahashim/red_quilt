@@ -115,7 +115,7 @@ module RedQuilt
                                                  start_byte: line.start_byte,
                                                  end_byte: line.end_byte,
                                                  blank: line.blank,
-                                                 lazy: true)
+                                                 lazy_continuation: true)
           else
             break
           end

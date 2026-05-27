@@ -128,7 +128,7 @@ module RedQuilt
     # nested ones) — the per-call state lives in method locals so
     # reentrant `#parse` calls are safe.
     class Parser
-      ItemLine = Struct.new(:content, :start_byte, :end_byte, :blank, :continuation, :lazy, keyword_init: true)
+      ItemLine = Struct.new(:content, :start_byte, :end_byte, :blank, :continuation, :lazy_continuation, keyword_init: true)
 
       def initialize(block_parser)
         @block_parser = block_parser
@@ -296,7 +296,7 @@ module RedQuilt
               end_byte: current.end_byte,
               blank: false,
               continuation: true,
-              lazy: true
+              lazy_continuation: true
             )
             index += 1
             next

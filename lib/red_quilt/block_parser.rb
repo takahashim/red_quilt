@@ -2,7 +2,7 @@
 
 module RedQuilt
   class BlockParser
-    Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy, keyword_init: true)
+    Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy_continuation, keyword_init: true)
 
     def initialize(arena)
       @arena = arena
@@ -352,7 +352,7 @@ module RedQuilt
         # paragraph_interrupt? so that "---" / "===" turns the open
         # paragraph into a heading instead of being treated as a
         # thematic break.
-        if paragraph_lines.any? && !line.lazy && (level = setext_underline_level(line.content))
+        if paragraph_lines.any? && !line.lazy_continuation && (level = setext_underline_level(line.content))
           setext_level = level
           index += 1
           break
@@ -363,7 +363,7 @@ module RedQuilt
         # outer collector, so we must not let `paragraph_interrupt?`
         # split them off into a new block (which would also try to
         # parse them as e.g. a list item start).
-        if !line.lazy && index > start_index && paragraph_interrupt?(lines, index)
+        if !line.lazy_continuation && index > start_index && paragraph_interrupt?(lines, index)
           break
         end
 
