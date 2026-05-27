@@ -30,7 +30,7 @@ module RedQuilt
         link: "link",
         image: "image",
         html_inline: "html",
-        strikethrough: "delete"
+        strikethrough: "delete",
       }.freeze
 
       def initialize(document)
@@ -113,13 +113,13 @@ module RedQuilt
           "start" => {
             "line" => start_loc[:line],
             "column" => start_loc[:column],
-            "offset" => span.start_byte
+            "offset" => span.start_byte,
           },
           "end" => {
             "line" => end_loc[:line],
             "column" => end_loc[:column],
-            "offset" => span.end_byte
-          }
+            "offset" => span.end_byte,
+          },
         }
       end
 

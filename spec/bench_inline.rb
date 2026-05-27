@@ -15,7 +15,7 @@ FIXTURES = {
 
   mixed_markup: "# Heading\n\nParagraph with *em*, **strong**, `code`, [link](/url), and ![image](/img.png).\n\n" * 20,
 
-  deep_nesting: "*_**___em___**_*" * 50
+  deep_nesting: "*_**___em___**_*" * 50,
 }
 
 Benchmark.ips do |x|

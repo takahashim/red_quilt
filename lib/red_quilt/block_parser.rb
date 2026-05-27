@@ -230,7 +230,7 @@ module RedQuilt
       2 => "-->",
       3 => "?>",
       4 => ">",
-      5 => "]]>"
+      5 => "]]>",
     }.freeze
 
     def parse_html_block(parent_id, lines, index)
@@ -510,7 +510,7 @@ module RedQuilt
           content: raw,
           start_byte: offset,
           end_byte: offset + size,
-          blank: !raw.match?(/[^ \t]/)
+          blank: !raw.match?(/[^ \t]/),
         )
         offset += size + 1
       end
@@ -557,7 +557,7 @@ module RedQuilt
         char: match[2][0],
         count: match[2].length,
         info: ReferenceDefinition.unescape_text(info),
-        indent: match[1].length
+        indent: match[1].length,
       }
     end
 
@@ -604,7 +604,7 @@ module RedQuilt
         if b == 0x20
           col += 1
         elsif b == 0x09
-          col = (col / 4 + 1) * 4
+          col = ((col / 4) + 1) * 4
         else
           break
         end
@@ -628,7 +628,7 @@ module RedQuilt
         if b == 0x20
           col += 1
         elsif b == 0x09
-          col = (col / 4 + 1) * 4
+          col = ((col / 4) + 1) * 4
         else
           break
         end
@@ -755,13 +755,13 @@ module RedQuilt
           severity: :warning,
           rule: :duplicate_reference,
           message: "Duplicate reference definition #{reference[:label].inspect} — keeping the first",
-          source_span: source_span
+          source_span: source_span,
         )
         return
       end
       @references[reference[:label]] = {
         destination: reference[:destination],
-        title: reference[:title]
+        title: reference[:title],
       }
     end
 

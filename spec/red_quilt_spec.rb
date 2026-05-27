@@ -42,7 +42,7 @@ RSpec.describe RedQuilt do
         :blockquote,
         :list,
         :table,
-        :html_block
+        :html_block,
       ])
     end
 
@@ -132,7 +132,7 @@ RSpec.describe RedQuilt do
                 type: :text,
                 source_span: RedQuilt::SourceSpan.new(2, 8),
                 attributes: { text: "Hello " },
-                children: []
+                children: [],
               },
               {
                 type: :emphasis,
@@ -142,11 +142,11 @@ RSpec.describe RedQuilt do
                     type: :text,
                     source_span: RedQuilt::SourceSpan.new(9, 14),
                     attributes: { text: "world" },
-                    children: []
-                  }
-                ]
-              }
-            ]
+                    children: [],
+                  },
+                ],
+              },
+            ],
           },
           {
             type: :paragraph,
@@ -162,13 +162,13 @@ RSpec.describe RedQuilt do
                     type: :text,
                     source_span: RedQuilt::SourceSpan.new(18, 22),
                     attributes: { text: "site" },
-                    children: []
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       })
     end
 
@@ -185,7 +185,7 @@ RSpec.describe RedQuilt do
             type: :text,
             source_span: RedQuilt::SourceSpan.new(2, 8),
             attributes: { text: "Hello " },
-            children: []
+            children: [],
           },
           {
             type: :emphasis,
@@ -195,11 +195,11 @@ RSpec.describe RedQuilt do
                 type: :text,
                 source_span: RedQuilt::SourceSpan.new(9, 14),
                 attributes: { text: "world" },
-                children: []
-              }
-            ]
-          }
-        ]
+                children: [],
+              },
+            ],
+          },
+        ],
       })
     end
   end
@@ -534,14 +534,14 @@ RSpec.describe RedQuilt do
       # heading source_span is the inline part ("Title"), not including "# "
       expect(heading.source_location).to eq({
         start_line: 1, start_column: 2,
-        end_line: 1, end_column: 7
+        end_line: 1, end_column: 7,
       })
 
       paragraph = doc.root.children.last
       # paragraph spans from "Body" to end of "newline"
       expect(paragraph.source_location).to eq({
         start_line: 3, start_column: 0,
-        end_line: 4, end_column: 12
+        end_line: 4, end_column: 12,
       })
     end
 

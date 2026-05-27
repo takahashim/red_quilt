@@ -32,7 +32,7 @@ module RedQuilt
         severity: severity,
         rule: rule,
         message: message,
-        source_span: source_span && { start_byte: source_span.start_byte, end_byte: source_span.end_byte }
+        source_span: source_span && { start_byte: source_span.start_byte, end_byte: source_span.end_byte },
       }
     end
 

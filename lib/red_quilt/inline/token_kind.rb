@@ -28,7 +28,7 @@ module RedQuilt
         RBRACKET => :rbracket,
         AUTOLINK_URI => :autolink_uri,
         AUTOLINK_EMAIL => :autolink_email,
-        HTML_INLINE => :html_inline
+        HTML_INLINE => :html_inline,
       }.freeze
 
       def self.name(kind)

@@ -51,7 +51,7 @@ module RedQuilt
         if b == 0x20
           abs_col += 1
         elsif b == 0x09
-          abs_col = (abs_col / 4 + 1) * 4
+          abs_col = ((abs_col / 4) + 1) * 4
         else
           break
         end
@@ -71,7 +71,7 @@ module RedQuilt
         content: tail,
         start_byte: line.start_byte + offset,
         end_byte: line.end_byte,
-        blank: !tail.match?(/\S/)
+        blank: !tail.match?(/\S/),
       )
     end
 

@@ -32,7 +32,7 @@ module RedQuilt
       NodeType::CODE_SPAN,
       NodeType::HTML_INLINE,
       NodeType::CODE_BLOCK,
-      NodeType::HTML_BLOCK
+      NodeType::HTML_BLOCK,
     ].freeze
 
     def initialize(document)

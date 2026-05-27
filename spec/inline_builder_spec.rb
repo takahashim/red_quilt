@@ -11,7 +11,7 @@ RSpec.describe RedQuilt::Inline::Builder do
     @paragraph_id ||= arena.add_node(
       RedQuilt::NodeType::PARAGRAPH,
       source_start: 0,
-      source_len: source.bytesize
+      source_len: source.bytesize,
     )
   end
 
@@ -22,7 +22,7 @@ RSpec.describe RedQuilt::Inline::Builder do
       out << {
         type: RedQuilt::NodeType.name_for(arena.type(child)),
         text: arena.text(child),
-        children: child_text_kinds(child)
+        children: child_text_kinds(child),
       }
       child = arena.raw_next_sibling_id(child)
     end

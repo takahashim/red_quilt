@@ -22,7 +22,7 @@ FIXTURES = {
   mixed_markup: "# Heading\n\nParagraph with *em*, **strong**, `code`, " \
                 "[link](/url), and ![image](/img.png).\n\n" * 20,
 
-  deep_nesting: "*_**___em___**_*" * 50
+  deep_nesting: "*_**___em___**_*" * 50,
 }
 
 # Sanity: each engine must produce some HTML for each fixture.

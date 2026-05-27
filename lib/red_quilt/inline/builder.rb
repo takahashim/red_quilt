@@ -235,7 +235,7 @@ module RedQuilt
         node = add_arena_node(
           NodeType::HTML_INLINE,
           @tokens.start_byte(id), @tokens.end_byte(id),
-          str1: @tokens.str1(id)
+          str1: @tokens.str1(id),
         )
         @arena.append_child(@parent_id, node)
       end
@@ -244,7 +244,7 @@ module RedQuilt
         link_id = add_arena_node(
           NodeType::LINK,
           @tokens.start_byte(id), @tokens.end_byte(id),
-          str1: normalize_link_uri(destination)
+          str1: normalize_link_uri(destination),
         )
         @arena.append_child(@parent_id, link_id)
         @arena.append_child(link_id, @arena.add_node(NodeType::TEXT, str1: label))
@@ -304,7 +304,7 @@ module RedQuilt
         node_id = add_arena_node(
           NodeType::TEXT,
           @tokens.start_byte(token_id), @tokens.end_byte(token_id),
-          str1: text
+          str1: text,
         )
         @arena.append_child(@parent_id, node_id)
         @provisional_nodes[node_id] = true
@@ -641,7 +641,7 @@ module RedQuilt
           return {
             end_byte: after_byte,
             destination: normalize_link_uri(ref[:destination].to_s),
-            title: ref[:title]
+            title: ref[:title],
           }
         end
 
@@ -651,7 +651,7 @@ module RedQuilt
         {
           end_byte: start_byte,
           destination: normalize_link_uri(ref[:destination].to_s),
-          title: ref[:title]
+          title: ref[:title],
         }
       end
 
@@ -684,7 +684,7 @@ module RedQuilt
         link_id = add_arena_node(
           link_kind, opener_start, match[:end_byte],
           str1: sanitize_destination(match[:destination]),
-          str2: match[:title]
+          str2: match[:title],
         )
 
         @arena.insert_before(@parent_id, opener.node_id, link_id)
@@ -750,7 +750,7 @@ module RedQuilt
         return unless @diagnostics
 
         @diagnostics << Diagnostic.new(
-          severity: severity, rule: rule, message: message, source_span: source_span
+          severity: severity, rule: rule, message: message, source_span: source_span,
         )
       end
 
@@ -766,7 +766,7 @@ module RedQuilt
         node_id = add_arena_node(
           NodeType::TEXT,
           @tokens.start_byte(token_id), @tokens.end_byte(token_id),
-          str1: text
+          str1: text,
         )
         @arena.append_child(@parent_id, node_id)
         @provisional_nodes[node_id] = true
@@ -774,7 +774,7 @@ module RedQuilt
         @delimiter_stack << Delimiter.new(
           node_id, char, count,
           (flags & 0b10) != 0,
-          (flags & 0b01) != 0
+          (flags & 0b01) != 0,
         )
       end
 

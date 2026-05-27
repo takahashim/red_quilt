@@ -20,7 +20,7 @@ module RedQuilt
       starts = [0]
       pos = 0
       while (idx = source.index("\n", pos))
-        starts << idx + 1
+        starts << (idx + 1)
         pos = idx + 1
       end
       starts

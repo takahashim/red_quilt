@@ -23,7 +23,7 @@ FIXTURES = {
   ref_defs: (1..100).map { |i| "[ref#{i}]: /url/#{i} \"title #{i}\"" }.join("\n"),
   html_blocks: "<div>\nhello\n</div>\n\n" * 50,
   thematic_breaks: "---\n\nparagraph\n\n" * 100,
-  mixed_block: "# heading\n\nparagraph\n\n> quote\n> more quote\n\n- list item 1\n- list item 2\n  - nested\n\n```\ncode\n```\n\n" * 20
+  mixed_block: "# heading\n\nparagraph\n\n> quote\n> more quote\n\n- list item 1\n- list item 2\n  - nested\n\n```\ncode\n```\n\n" * 20,
 }.freeze
 
 Benchmark.ips do |x|

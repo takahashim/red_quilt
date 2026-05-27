@@ -92,11 +92,11 @@ module RedQuilt
           reference: {
             label: label,
             destination: ReferenceDefinition.unescape_text(strip_angle_brackets(destination)),
-            title: title
+            title: title,
           },
           consumed: consumed,
           source_span: SourceSpan.new(@lines[@index].start_byte,
-                                      @lines[@index + consumed - 1].end_byte)
+                                      @lines[@index + consumed - 1].end_byte),
         }
       end
 

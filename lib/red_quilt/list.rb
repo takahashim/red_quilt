@@ -91,7 +91,7 @@ module RedQuilt
         if b == 0x20
           col += 1
         elsif b == 0x09
-          col = (col / 4 + 1) * 4
+          col = ((col / 4) + 1) * 4
         end
       end
       col - start_col
@@ -119,7 +119,7 @@ module RedQuilt
         marker: marker,
         content: content,
         content_start: leading + marker_width + 1,
-        content_indent: content_indent
+        content_indent: content_indent,
       }
     end
 
@@ -184,18 +184,18 @@ module RedQuilt
             index += 1
           end
 
-          if blank_count.positive?
-            next_match = index < lines.length ? List.match(lines[index].content) : nil
-            if next_match && List.same_group?(first_match, next_match)
-              loose = true
-            else
-              # Rewind so the caller's parse_lines sees the blank line.
-              # When this parse was itself processing an item's
-              # continuation lines, the caller needs the blank to detect
-              # "blank between block-level elements" → loose-makes-item.
-              index -= blank_count
-              break
-            end
+          next unless blank_count.positive?
+
+          next_match = index < lines.length ? List.match(lines[index].content) : nil
+          if next_match && List.same_group?(first_match, next_match)
+            loose = true
+          else
+            # Rewind so the caller's parse_lines sees the blank line.
+            # When this parse was itself processing an item's
+            # continuation lines, the caller needs the blank to detect
+            # "blank between block-level elements" → loose-makes-item.
+            index -= blank_count
+            break
           end
         end
 
@@ -215,7 +215,7 @@ module RedQuilt
           start_byte: first_line.start_byte + match[:content_start],
           end_byte: first_line.end_byte,
           blank: match[:content].strip.empty?,
-          continuation: false
+          continuation: false,
         )
         index += 1
 
@@ -238,7 +238,7 @@ module RedQuilt
               start_byte: current.start_byte,
               end_byte: current.end_byte,
               blank: true,
-              continuation: true
+              continuation: true,
             )
             index += 1
             next
@@ -265,7 +265,7 @@ module RedQuilt
               start_byte: current.start_byte + start_advance,
               end_byte: current.end_byte,
               blank: false,
-              continuation: true
+              continuation: true,
             )
             index += 1
             next
@@ -296,7 +296,7 @@ module RedQuilt
               end_byte: current.end_byte,
               blank: false,
               continuation: true,
-              lazy_continuation: true
+              lazy_continuation: true,
             )
             index += 1
             next

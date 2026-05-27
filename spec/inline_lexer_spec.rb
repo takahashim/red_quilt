@@ -28,7 +28,7 @@ RSpec.describe RedQuilt::Inline::Lexer do
       {
         kind: RedQuilt::Inline::TokenKind.name(tokens.kind(id)),
         range: [tokens.start_byte(id), tokens.end_byte(id)],
-        str1: tokens.str1(id)
+        str1: tokens.str1(id),
       }
     end
   end
@@ -37,21 +37,21 @@ RSpec.describe RedQuilt::Inline::Lexer do
     it "emits a single TEXT token for plain ASCII input" do
       result = lex("hello")
       expect(token_summary(result)).to eq([
-        { kind: :text, range: [0, 5], str1: nil }
+        { kind: :text, range: [0, 5], str1: nil },
       ])
     end
 
     it "emits a single TEXT token for plain multibyte input" do
       result = lex("日本語")
       expect(token_summary(result)).to eq([
-        { kind: :text, range: [0, 9], str1: nil }
+        { kind: :text, range: [0, 9], str1: nil },
       ])
     end
 
     it "stops at a special byte and emits TEXT for the leading run" do
       result = lex("hello*world")
       expect(token_summary(result).first).to eq(
-        { kind: :text, range: [0, 5], str1: nil }
+        { kind: :text, range: [0, 5], str1: nil },
       )
     end
   end

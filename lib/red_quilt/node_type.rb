@@ -48,7 +48,7 @@ module RedQuilt
       LINK => :link,
       IMAGE => :image,
       HTML_INLINE => :html_inline,
-      STRIKETHROUGH => :strikethrough
+      STRIKETHROUGH => :strikethrough,
     }.freeze
 
     module_function

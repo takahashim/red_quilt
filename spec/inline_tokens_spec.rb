@@ -18,7 +18,7 @@ RSpec.describe RedQuilt::Inline::Tokens do
         RedQuilt::Inline::TokenKind::DELIM_RUN,
         start_byte: 3, end_byte: 5,
         int1: "*".ord, int2: 2, int3: 0b11,
-        str1: nil
+        str1: nil,
       )
       expect(tokens.int1(id)).to eq("*".ord)
       expect(tokens.int2(id)).to eq(2)

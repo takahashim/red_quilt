@@ -38,7 +38,7 @@ RSpec.describe RedQuilt::Arena do
         "| A | B |\n| - | - |\n| 1 | 2 |\n",
         "[ref]: /url\n\n[ref]",
         "~~struck~~ and `code`",
-        "***deeply*** _nested_ emphasis"
+        "***deeply*** _nested_ emphasis",
       ].each do |md|
         doc = RedQuilt.parse(md)
         expect { doc.arena.check_integrity!(doc.root_id) }.not_to raise_error,

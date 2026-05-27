@@ -12,8 +12,8 @@ module RedQuilt
       @node_id = node_id
     end
 
-    def each(&block)
-      walk(&block)
+    def each(&)
+      walk(&)
     end
 
     def type
@@ -65,7 +65,7 @@ module RedQuilt
         start_line: start_loc[:line],
         start_column: start_loc[:column],
         end_line: end_loc[:line],
-        end_column: end_loc[:column]
+        end_column: end_loc[:column],
       }
     end
 
@@ -73,7 +73,7 @@ module RedQuilt
       ast = {
         type: type,
         source_span: source_span,
-        children: children.map(&:to_h)
+        children: children.map(&:to_h),
       }
 
       attributes = ast_attributes
@@ -92,7 +92,7 @@ module RedQuilt
           ordered: @arena.int1(@node_id) == 1,
           start_number: @arena.int2(@node_id),
           tight: @arena.int3(@node_id) == 1,
-          delimiter: @arena.str1(@node_id)
+          delimiter: @arena.str1(@node_id),
         }
       when NodeType::TABLE_ROW, NodeType::TABLE_CELL
         { header: @arena.int1(@node_id) == 1, text: text }

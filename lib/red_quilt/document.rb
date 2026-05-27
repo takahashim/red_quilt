@@ -2,7 +2,7 @@
 
 module RedQuilt
   class Document
-    attr_reader :source, :arena, :root_id
+    attr_reader :source, :arena, :root_id, :references
 
     def initialize(source, arena, root_id, allow_html: false, disallow_raw_html: false, references: {})
       @source = source
@@ -26,16 +26,12 @@ module RedQuilt
       @disallow_raw_html
     end
 
-    def references
-      @references
-    end
-
     def root
       NodeRef.new(self, @root_id)
     end
 
-    def walk(&block)
-      root.walk(&block)
+    def walk(&)
+      root.walk(&)
     end
 
     # Renders the document to HTML.

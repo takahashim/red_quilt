@@ -31,7 +31,7 @@ module RedQuilt
       auto_title: false,
       title: nil,
       lang: "en",
-      css: nil
+      css: nil,
     }.freeze
 
     FORMATS = %i[html ast json].freeze
@@ -157,7 +157,7 @@ module RedQuilt
         standalone: options[:standalone],
         title: title,
         lang: options[:lang],
-        css: options[:css]
+        css: options[:css],
       )
     end
 
