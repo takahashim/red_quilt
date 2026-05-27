@@ -1,10 +1,11 @@
 # RedQuilt
 
-A modern Markdown document processor for Ruby, with an arena-style AST, source spans, safe-by-default HTML rendering, and optional performance optimizations.
+A modern Markdown document processor in pure Ruby, with an arena-style AST.
+Passes the full CommonMark spec test suite, and as fast as kramdown, sometimes faster.
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Add this line to Gemfile:
 
 ```ruby
 gem "red_quilt"
@@ -83,14 +84,6 @@ span = node.source_span
 span.start_byte       # Integer (0-indexed byte offset)
 span.end_byte         # Integer (exclusive)
 span.length           # Computed: end_byte - start_byte
-```
-
-### SourceMap
-
-```ruby
-map = doc.source_map
-loc = map.line_column(byte_offset)
-# => { line: 3, column: 5 }
 ```
 
 ## Supported Syntax
