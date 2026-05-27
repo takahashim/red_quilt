@@ -2,9 +2,9 @@
 
 require "stringio"
 require "tempfile"
-require "mdarena/cli"
+require "red_quilt/cli"
 
-RSpec.describe Mdarena::CLI do
+RSpec.describe RedQuilt::CLI do
   def run(argv, input: "")
     stdin = StringIO.new(input)
     stdout = StringIO.new
@@ -183,7 +183,7 @@ RSpec.describe Mdarena::CLI do
     it "prints the version with --version" do
       code, _, err = run(["--version"])
       expect(code).to eq(0)
-      expect(err).to include(Mdarena::VERSION)
+      expect(err).to include(RedQuilt::VERSION)
     end
   end
 end

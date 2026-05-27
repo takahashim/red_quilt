@@ -2,7 +2,7 @@
 
 RSpec.describe "GFM extended autolinks" do
   def render(src)
-    Mdarena.render_html(src, extended_autolinks: true)
+    RedQuilt.render_html(src, extended_autolinks: true)
   end
 
   describe "URL forms" do
@@ -84,7 +84,7 @@ RSpec.describe "GFM extended autolinks" do
 
   describe "opt-in" do
     it "is disabled by default" do
-      expect(Mdarena.render_html("http://example.com\n"))
+      expect(RedQuilt.render_html("http://example.com\n"))
         .to eq("<p>http://example.com</p>\n")
     end
   end

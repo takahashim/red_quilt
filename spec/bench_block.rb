@@ -14,7 +14,7 @@
 # take the median of 3 invocations.
 
 require "benchmark/ips"
-require_relative "../lib/mdarena"
+require_relative "../lib/red_quilt"
 
 FIXTURES = {
   nested_blockquote:  "> level 1\n> > level 2\n> > > level 3\n" * 50,
@@ -30,6 +30,6 @@ Benchmark.ips do |x|
   x.warmup = 5
   x.time = 5
   FIXTURES.each do |name, markdown|
-    x.report(name.to_s) { Mdarena.parse(markdown) }
+    x.report(name.to_s) { RedQuilt.parse(markdown) }
   end
 end

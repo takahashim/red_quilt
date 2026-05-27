@@ -7,7 +7,7 @@
 
 RSpec.describe "Inline emphasis" do
   def render(src)
-    Mdarena.render_html(src)
+    RedQuilt.render_html(src)
   end
 
   describe "basic asterisk emphasis" do

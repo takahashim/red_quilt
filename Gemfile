@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-# Specify your gem's dependencies in mdarena.gemspec
+# Specify your gem's dependencies in red_quilt.gemspec
 gemspec
 
 gem "rake", "~> 13.0"

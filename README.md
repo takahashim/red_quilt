@@ -1,4 +1,4 @@
-# Mdarena
+# RedQuilt
 
 A pragmatic Markdown document processor for Ruby, with an arena-style AST, source spans, safe-by-default HTML rendering, and optional performance optimizations.
 
@@ -7,7 +7,7 @@ A pragmatic Markdown document processor for Ruby, with an arena-style AST, sourc
 Add this line to your application's Gemfile:
 
 ```ruby
-gem "mdarena"
+gem "red_quilt"
 ```
 
 ## Quick Start
@@ -15,24 +15,24 @@ gem "mdarena"
 ### Parsing and rendering
 
 ```ruby
-require "mdarena"
+require "red_quilt"
 
 # Parse Markdown to a document
-doc = Mdarena.parse("# Hello\n\nThis is **bold**.")
+doc = RedQuilt.parse("# Hello\n\nThis is **bold**.")
 html = doc.to_html
 # => "<h1>Hello</h1>\n<p>This is <strong>bold</strong>.</p>\n"
 
 # Or render directly (without building AST)
-html = Mdarena.render_html("# Hello\n\n**bold**")
+html = RedQuilt.render_html("# Hello\n\n**bold**")
 ```
 
 ### HTML is safe by default
 
 ```ruby
-Mdarena.render_html("Hi <em>tag</em>")
+RedQuilt.render_html("Hi <em>tag</em>")
 # => "<p>Hi &lt;em&gt;tag&lt;/em&gt;</p>\n"
 
-Mdarena.render_html("Hi <em>tag</em>", allow_html: true)
+RedQuilt.render_html("Hi <em>tag</em>", allow_html: true)
 # => "<p>Hi <em>tag</em></p>\n"
 ```
 
@@ -41,7 +41,7 @@ Mdarena.render_html("Hi <em>tag</em>", allow_html: true)
 ### Document
 
 ```ruby
-doc = Mdarena.parse("# Title\n\nBody")
+doc = RedQuilt.parse("# Title\n\nBody")
 
 doc.root              # Root node (NodeRef)
 doc.walk              # Traverse all nodes (block: { |node| ... } or Enumerator)
@@ -122,7 +122,7 @@ loc = map.line_column(byte_offset)
 
 ## CommonMark Compatibility
 
-Mdarena achieves 100% compliance with the CommonMark v0.31.2 specification.
+RedQuilt achieves 100% compliance with the CommonMark v0.31.2 specification.
 
 ### Fully supported features
 
@@ -153,28 +153,28 @@ All CommonMark v0.31.2 specification test cases pass without exception.
 
 ## Command-line Tool
 
-Mdarena ships with a `mdarena` CLI for converting Markdown files to HTML or inspecting the AST.
+RedQuilt ships with a `red_quilt` CLI for converting Markdown files to HTML or inspecting the AST.
 
 ### Basic usage
 
 ```bash
 # Convert Markdown file to HTML
-mdarena input.md > output.html
+red_quilt input.md > output.html
 
 # Convert from stdin
-echo "# Hello" | mdarena
+echo "# Hello" | red_quilt
 
 # Output as AST (for debugging)
-mdarena --format ast input.md
+red_quilt --format ast input.md
 
 # Output as MDAST-compatible JSON (for external tools)
-mdarena --format json input.md
+red_quilt --format json input.md
 
 # Standalone HTML document with title
-mdarena --standalone --title "My Document" input.md
+red_quilt --standalone --title "My Document" input.md
 
 # Enable GFM extended autolinks
-mdarena --extended-autolinks input.md
+red_quilt --extended-autolinks input.md
 ```
 
 ### Options
@@ -200,14 +200,14 @@ Exit code is 0 on success, 1 if errors are detected.
 
 ### Security model
 
-Mdarena prioritizes **security by default**:
+RedQuilt prioritizes **security by default**:
 
 ```ruby
 # Default: All HTML is escaped, dangerous URLs blocked
-Mdarena.render_html("<script>alert('xss')</script>")
+RedQuilt.render_html("<script>alert('xss')</script>")
 # => "<p>&lt;script&gt;alert('xss')&lt;/script&gt;</p>"
 
-Mdarena.render_html("[click](javascript:alert(1))")
+RedQuilt.render_html("[click](javascript:alert(1))")
 # => "<p><a href=\"\">click</a></p>"
 ```
 
@@ -225,7 +225,7 @@ All other schemes (`javascript:`, `data:`, `vbscript:`, etc.) are blocked by rep
 
 ```ruby
 # Allow raw HTML (use with trusted input only)
-Mdarena.render_html(user_markdown, allow_html: true)
+RedQuilt.render_html(user_markdown, allow_html: true)
 
 # This passes HTML blocks and inline tags through unchanged
 ```
@@ -235,7 +235,7 @@ Mdarena.render_html(user_markdown, allow_html: true)
 ### Extract all headings
 
 ```ruby
-doc = Mdarena.parse(source)
+doc = RedQuilt.parse(source)
 headings = doc.root.find_all(:heading)
 
 headings.each do |node|
@@ -248,7 +248,7 @@ end
 ### Walk the AST with line numbers
 
 ```ruby
-doc = Mdarena.parse(source)
+doc = RedQuilt.parse(source)
 
 doc.root.walk do |node|
   loc = node.source_location
@@ -261,7 +261,7 @@ end
 ### Export and transform
 
 ```ruby
-doc = Mdarena.parse("# Title\n\nBody with [link](/url)")
+doc = RedQuilt.parse("# Title\n\nBody with [link](/url)")
 ast = doc.to_ast
 
 # Print AST structure (for debugging)
@@ -294,7 +294,7 @@ Profiles parse performance on various Markdown patterns.
 
 ## Performance (v1.2.0, Ruby 4.0.5)
 
-Mdarena achieves **kramdown parity** with the CommonMark compliance to spare.
+RedQuilt achieves **kramdown parity** with the CommonMark compliance to spare.
 
 **v1.2.0 results** (inline pipeline redesign):
 

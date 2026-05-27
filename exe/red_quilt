@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "red_quilt"
+require "red_quilt/cli"
+
+exit RedQuilt::CLI.run(ARGV)

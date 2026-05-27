@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Speed comparison: mdarena vs kramdown.
+# Speed comparison: red_quilt vs kramdown.
 #
 # Run: bundle exec ruby spec/bench_vs_kramdown.rb
 
 require "benchmark/ips"
 require "kramdown"
-require_relative "../lib/mdarena"
+require_relative "../lib/red_quilt"
 
 FIXTURES = {
   short_paragraph: "Hello *world* with **emphasis** and [link](/url).",
@@ -27,7 +27,7 @@ FIXTURES = {
 
 # Sanity: each engine must produce some HTML for each fixture.
 FIXTURES.each do |name, source|
-  raise "mdarena empty on #{name}" if Mdarena.render_html(source).empty?
+  raise "red_quilt empty on #{name}" if RedQuilt.render_html(source).empty?
   raise "kramdown empty on #{name}" if Kramdown::Document.new(source).to_html.empty?
 end
 
@@ -35,7 +35,7 @@ FIXTURES.each do |name, source|
   puts
   puts "== #{name} (#{source.bytesize} bytes) =="
   Benchmark.ips do |x|
-    x.report("mdarena")  { Mdarena.render_html(source) }
+    x.report("red_quilt")  { RedQuilt.render_html(source) }
     x.report("kramdown") { Kramdown::Document.new(source).to_html }
     x.compare!
   end
