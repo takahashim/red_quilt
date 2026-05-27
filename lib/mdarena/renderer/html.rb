@@ -107,7 +107,7 @@ module Mdarena
           render_children(node_id)
           @out << "</a>"
         when NodeType::IMAGE
-          alt = collect_plain_text(node_id)
+          alt = PlainText.from(@arena, node_id)
           dest = escape_html(@arena.str1(node_id).to_s)
           @out << %(<img src="#{dest}" alt="#{escape_html(alt)}")
           append_title_attribute(node_id)
@@ -208,21 +208,6 @@ module Mdarena
 
       def filter_disallowed_raw(text)
         text.gsub(DISALLOWED_RAW_TAG_RE, "&lt;")
-      end
-
-      def collect_plain_text(node_id)
-        text = +""
-        @arena.each_child(node_id) do |child_id|
-          case @arena.type(child_id)
-          when NodeType::TEXT, NodeType::CODE_SPAN
-            text << @arena.text(child_id).to_s
-          when NodeType::SOFTBREAK, NodeType::HARDBREAK
-            text << " "
-          else
-            text << collect_plain_text(child_id)
-          end
-        end
-        text
       end
 
       def append_title_attribute(node_id)

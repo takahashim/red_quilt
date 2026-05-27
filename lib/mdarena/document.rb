@@ -109,7 +109,7 @@ module Mdarena
     def first_heading_text_walk(node_id)
       return nil if node_id == -1
       if @arena.type(node_id) == NodeType::HEADING
-        return collect_plain_text(node_id)
+        return PlainText.from(@arena, node_id)
       end
       child = @arena.raw_first_child_id(node_id)
       while child != -1
@@ -118,29 +118,6 @@ module Mdarena
         child = @arena.raw_next_sibling_id(child)
       end
       nil
-    end
-
-    def collect_plain_text(node_id)
-      out = +""
-      collect_plain_text_walk(node_id, out)
-      out
-    end
-
-    def collect_plain_text_walk(node_id, out)
-      case @arena.type(node_id)
-      when NodeType::TEXT
-        out << @arena.text(node_id).to_s
-      when NodeType::CODE_SPAN
-        out << @arena.str1(node_id).to_s
-      when NodeType::SOFTBREAK, NodeType::HARDBREAK
-        out << " "
-      else
-        child = @arena.raw_first_child_id(node_id)
-        while child != -1
-          collect_plain_text_walk(child, out)
-          child = @arena.raw_next_sibling_id(child)
-        end
-      end
     end
   end
 end

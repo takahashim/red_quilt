@@ -54,28 +54,13 @@ module Mdarena
 
     def check_missing_alt(node_id)
       # IMAGE's str1 holds the destination URL, so NodeRef#text would
-      # report the URL as "alt text" for a childless image. Walk only
-      # the descendants to get the real alt content.
-      alt = +""
-      collect_descendant_text(node_id, alt)
-      return unless alt.strip.empty?
+      # report the URL as "alt text" for a childless image. PlainText
+      # walks descendants only, so a childless image yields "".
+      return unless PlainText.from(@arena, node_id).strip.empty?
 
       push(:info, :missing_alt,
            "Image has no alt text",
            @arena.source_span(node_id))
-    end
-
-    def collect_descendant_text(node_id, out)
-      @arena.each_child(node_id) do |child_id|
-        case @arena.type(child_id)
-        when NodeType::TEXT, NodeType::CODE_SPAN
-          out << @arena.text(child_id).to_s
-        when NodeType::SOFTBREAK, NodeType::HARDBREAK
-          out << " "
-        else
-          collect_descendant_text(child_id, out)
-        end
-      end
     end
 
     def push(severity, rule, message, source_span)
