@@ -73,6 +73,44 @@ RSpec.describe "whitespace strictness" do
     end
   end
 
+  describe "reference definition whitespace (CommonMark 4.7)" do
+    # Reference definitions follow the same narrow whitespace rule as
+    # inline link tails: only space/tab around the destination and as a
+    # title separator (plus at most one line ending). FF/VT must not be
+    # treated as separators.
+
+    it "does not accept form feed before the destination" do
+      out = render("[x]:\f/url\n\n[x]\n")
+      expect(out).not_to include("<a href=")
+      expect(out).to include("[x]:")
+    end
+
+    it "does not accept vertical tab before the destination" do
+      out = render("[x]:\v/url\n\n[x]\n")
+      expect(out).not_to include("<a href=")
+    end
+
+    it "does not accept form feed between destination and title" do
+      out = render("[x]: /url\f\"title\"\n\n[x]\n")
+      expect(out).not_to include("<a href=")
+    end
+
+    it "does not accept vertical tab between destination and title" do
+      out = render("[x]: /url\v\"title\"\n\n[x]\n")
+      expect(out).not_to include("<a href=")
+    end
+
+    it "still accepts a space before the destination" do
+      out = render("[x]: /url\n\n[x]\n")
+      expect(out).to include(%(<a href="/url">))
+    end
+
+    it "still accepts a tab between destination and title" do
+      out = render("[x]: /url\t\"title\"\n\n[x]\n")
+      expect(out).to include(%(<a href="/url" title="title">))
+    end
+  end
+
   describe "inline link tail whitespace (CommonMark 6.3)" do
     it "does not consume form feed between destination and title" do
       out = render(%([x](url\f"title")))

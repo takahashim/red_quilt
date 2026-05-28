@@ -21,11 +21,29 @@ module RedQuilt
     # and reference link uses.
     LABEL_MAX_LENGTH = 999
 
+    # CommonMark 6.3 link-tail whitespace: space/tab only (line endings
+    # are handled separately by the caller). Intentionally narrower than
+    # Ruby's `strip`/`lstrip`, which also match FF (U+000C) and VT
+    # (U+000B). Mirrors Inline::Builder#link_tail_whitespace_byte?.
+    LINK_TAIL_WS_RE = /[ \t]/
+
     module_function
 
     # True when `text` exceeds the spec's link-label length limit.
     def label_too_long?(text)
       text.to_s.length > LABEL_MAX_LENGTH
+    end
+
+    # Narrow lstrip: only space and tab. Used for the spec-defined
+    # whitespace around link destinations and titles in reference
+    # definitions.
+    def link_lstrip(text)
+      text.sub(/\A[ \t]+/, "")
+    end
+
+    # True when the string is empty or contains only spaces and tabs.
+    def link_blank?(text)
+      text.match?(/\A[ \t]*\z/)
     end
 
     # Attempts to consume a reference definition starting at `lines[index]`.
@@ -133,7 +151,7 @@ module RedQuilt
 
       def collect_destination_chunks(remainder, consumed)
         chunks = [remainder]
-        return [chunks, consumed] unless remainder.strip.empty?
+        return [chunks, consumed] unless ReferenceDefinition.link_blank?(remainder)
 
         return [nil, nil] if @index + consumed >= @lines.length
 
@@ -148,7 +166,7 @@ module RedQuilt
         title_source = rest.to_s
         consumed_before_title = consumed
         title_on_separate_line = false
-        if title_source.strip.empty? && @index + consumed < @lines.length
+        if ReferenceDefinition.link_blank?(title_source) && @index + consumed < @lines.length
           next_line = @lines[@index + consumed]
           if next_line && potential_title_start?(next_line.content)
             title_source = next_line.content
@@ -187,7 +205,7 @@ module RedQuilt
       end
 
       def parse_destination(text)
-        source = text.to_s.lstrip
+        source = ReferenceDefinition.link_lstrip(text)
         return [nil, nil] if source.empty?
 
         if source.start_with?("<")
@@ -243,7 +261,7 @@ module RedQuilt
       end
 
       def title_needs_more_lines?(text)
-        stripped = text.to_s.lstrip
+        stripped = ReferenceDefinition.link_lstrip(text)
         return false if stripped.empty?
 
         quote = stripped[0]
@@ -255,11 +273,11 @@ module RedQuilt
       end
 
       def potential_title_start?(text)
-        %w[" ' (].include?(text.to_s.lstrip[0])
+        %w[" ' (].include?(ReferenceDefinition.link_lstrip(text)[0])
       end
 
       def parse_title(text)
-        stripped = text.to_s.lstrip
+        stripped = ReferenceDefinition.link_lstrip(text)
         return [nil, stripped] if stripped.empty?
 
         opener = stripped[0]
