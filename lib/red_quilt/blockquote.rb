@@ -18,7 +18,7 @@ module RedQuilt
     end
 
     # Strip the leading `>` (and at most one column of whitespace after
-    # it) from a blockquote line. Returns a new BlockParser::Line whose
+    # it) from a blockquote line. Returns a new Line whose
     # content is the inner text. If the line has no `>` prefix, the
     # original line is returned unchanged (wrapped in a fresh Line so
     # the caller treats it uniformly).
@@ -33,10 +33,10 @@ module RedQuilt
         abs_col += 1
       end
       unless i < bytes && content.getbyte(i) == 0x3E
-        return BlockParser::Line.new(content: content,
-                                     start_byte: line.start_byte,
-                                     end_byte: line.end_byte,
-                                     blank: !content.match?(/\S/))
+        return Line.new(content: content,
+                        start_byte: line.start_byte,
+                        end_byte: line.end_byte,
+                        blank: !content.match?(/\S/))
       end
       i += 1
       abs_col += 1 # consume `>`
@@ -67,7 +67,7 @@ module RedQuilt
         offset = i
       end
 
-      BlockParser::Line.new(
+      Line.new(
         content: tail,
         start_byte: line.start_byte + offset,
         end_byte: line.end_byte,
@@ -111,11 +111,11 @@ module RedQuilt
             # in-quote line is paragraph-eligible content. The `lazy`
             # flag prevents the paragraph parser from interpreting
             # `===` / `---` on such a line as a setext underline.
-            block_lines << BlockParser::Line.new(content: line.content,
-                                                 start_byte: line.start_byte,
-                                                 end_byte: line.end_byte,
-                                                 blank: line.blank,
-                                                 lazy_continuation: true)
+            block_lines << Line.new(content: line.content,
+                                    start_byte: line.start_byte,
+                                    end_byte: line.end_byte,
+                                    blank: line.blank,
+                                    lazy_continuation: true)
           else
             break
           end

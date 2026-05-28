@@ -3,6 +3,7 @@
 require_relative "red_quilt/version"
 require_relative "red_quilt/node_type"
 require_relative "red_quilt/source_span"
+require_relative "red_quilt/line"
 require_relative "red_quilt/source_map"
 require_relative "red_quilt/arena"
 require_relative "red_quilt/node_ref"

@@ -128,8 +128,6 @@ module RedQuilt
     # nested ones) — the per-call state lives in method locals so
     # reentrant `#parse` calls are safe.
     class Parser
-      ItemLine = Struct.new(:content, :start_byte, :end_byte, :blank, :continuation, :lazy_continuation, keyword_init: true)
-
       def initialize(block_parser)
         @block_parser = block_parser
         @arena = block_parser.arena
@@ -210,12 +208,11 @@ module RedQuilt
         item_lines = []
         n = match[:content_indent]
         first_line = lines[index]
-        item_lines << ItemLine.new(
+        item_lines << Line.new(
           content: match[:content],
           start_byte: first_line.start_byte + match[:content_start],
           end_byte: first_line.end_byte,
           blank: match[:content].strip.empty?,
-          continuation: false,
         )
         index += 1
 
@@ -233,12 +230,11 @@ module RedQuilt
           current = lines[index]
 
           if current.blank
-            pending_blanks << ItemLine.new(
+            pending_blanks << Line.new(
               content: "",
               start_byte: current.start_byte,
               end_byte: current.end_byte,
               blank: true,
-              continuation: true,
             )
             index += 1
             next
@@ -260,12 +256,11 @@ module RedQuilt
             ws_bytes = @block_parser.__send__(:leading_ws_bytes, current.content)
             start_advance = [ws_bytes, current.content.bytesize - stripped_content.bytesize].min
             start_advance = 0 if start_advance.negative?
-            item_lines << ItemLine.new(
+            item_lines << Line.new(
               content: stripped_content,
               start_byte: current.start_byte + start_advance,
               end_byte: current.end_byte,
               blank: false,
-              continuation: true,
             )
             index += 1
             next
@@ -290,12 +285,11 @@ module RedQuilt
             # fresh block start (e.g. `    - e` becoming `- e`).
             stripped = current.content.sub(/\A[ \t]+/, "")
             strip_len = current.content.length - stripped.length
-            item_lines << ItemLine.new(
+            item_lines << Line.new(
               content: stripped,
               start_byte: current.start_byte + strip_len,
               end_byte: current.end_byte,
               blank: false,
-              continuation: true,
               lazy_continuation: true,
             )
             index += 1

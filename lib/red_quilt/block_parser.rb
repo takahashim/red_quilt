@@ -2,8 +2,6 @@
 
 module RedQuilt
   class BlockParser
-    Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy_continuation, keyword_init: true)
-
     def initialize(arena)
       @arena = arena
       @lines = build_lines(arena.source)
