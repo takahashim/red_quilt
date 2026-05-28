@@ -34,7 +34,7 @@ module RedQuilt
                               diagnostics: @document.diagnostics).build(node_id, @tokens)
         else
           start_byte = @arena.source_start(node_id)
-          end_byte = start_byte + @arena.source_len(node_id)
+          end_byte = @arena.source_end(node_id)
           @lexer.lex_into(@tokens, start_byte, end_byte)
           @builder.build(node_id, @tokens)
         end

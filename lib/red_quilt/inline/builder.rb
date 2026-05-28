@@ -13,7 +13,6 @@ module RedQuilt
     #      delimiter stack entries into EMPHASIS / STRONG nodes.
     class Builder
       SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
-      TRAILING_SPACE_RE = (1..8).map { |n| / {#{n},}\z/ }.freeze
 
       # `count` is the CommonMark delimiter-run length; a Delimiter is
       # never enumerated, so shadowing Struct#count (from Enumerable) is
@@ -143,7 +142,7 @@ module RedQuilt
 
       def can_coalesce?(last_id, start_byte)
         if @track_source
-          @arena.source_start(last_id) + @arena.source_len(last_id) == start_byte
+          @arena.source_end(last_id) == start_byte
         else
           !@arena.str1(last_id).nil?
         end
@@ -546,8 +545,7 @@ module RedQuilt
           closer_node = closer.node_id
 
           if @track_source
-            opener_match_start = @arena.source_start(opener_node) +
-                                 @arena.source_len(opener_node) - strength
+            opener_match_start = @arena.source_end(opener_node) - strength
             closer_match_end = @arena.source_start(closer_node) + strength
           else
             opener_match_start = -1
@@ -575,7 +573,7 @@ module RedQuilt
             str = @arena.str1(opener_node)
             @arena.update_str1(opener_node, str[0...-strength])
             if @track_source
-              new_end = @arena.source_start(opener_node) + @arena.source_len(opener_node) - strength
+              new_end = @arena.source_end(opener_node) - strength
               @arena.update_span(opener_node, @arena.source_start(opener_node), new_end)
             end
           end
@@ -590,7 +588,7 @@ module RedQuilt
             @arena.update_str1(closer_node, str[strength..])
             if @track_source
               new_start = @arena.source_start(closer_node) + strength
-              new_end = @arena.source_start(closer_node) + @arena.source_len(closer_node)
+              new_end = @arena.source_end(closer_node)
               @arena.update_span(closer_node, new_start, new_end)
             end
           end

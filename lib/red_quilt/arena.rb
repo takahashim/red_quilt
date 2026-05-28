@@ -206,6 +206,11 @@ module RedQuilt
       @source_len[id]
     end
 
+    # Byte offset one past the node's source span (start + len).
+    def source_end(id)
+      @source_start[id] + @source_len[id]
+    end
+
     def int1(id)
       @int1[id]
     end
