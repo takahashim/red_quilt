@@ -13,6 +13,12 @@ module RedQuilt
     #      delimiter stack entries into EMPHASIS / STRONG nodes.
     class Builder
       SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
+      # Autolinks (`<scheme:...>`) are not run through the SAFE_SCHEMES
+      # allowlist: CommonMark permits arbitrary schemes there (e.g.
+      # `<made-up-scheme://x>`), and an allowlist would break that
+      # conformance. Only the schemes that execute script when the link
+      # is navigated are denied.
+      UNSAFE_AUTOLINK_SCHEMES = %w[javascript vbscript data].freeze
 
       # `count` is the CommonMark delimiter-run length; a Delimiter is
       # never enumerated, so shadowing Struct#count (from Enumerable) is
@@ -221,10 +227,27 @@ module RedQuilt
         link_id = add_arena_node(
           NodeType::LINK,
           @tokens.start_byte(id), @tokens.end_byte(id),
-          str1: @link_scanner.normalize_uri(destination),
+          str1: block_unsafe_autolink(@link_scanner.normalize_uri(destination)),
         )
         @arena.append_child(@parent_id, link_id)
         @arena.append_child(link_id, @arena.add_node(NodeType::TEXT, str1: label))
+      end
+
+      # Returns "" (blocking the href) for autolink destinations whose
+      # scheme executes script on navigation; otherwise the destination
+      # is returned unchanged. Unlike sanitize_destination this is a
+      # denylist, to stay CommonMark-conformant for benign custom schemes.
+      def block_unsafe_autolink(destination)
+        scheme = destination[%r{\A([a-zA-Z][a-zA-Z0-9+\-.]*):}, 1]
+        return destination if scheme.nil?
+        return destination unless UNSAFE_AUTOLINK_SCHEMES.include?(scheme.downcase)
+
+        report_diagnostic(
+          severity: :warning,
+          rule: :unsafe_url,
+          message: "Unsafe URL scheme #{scheme.downcase.inspect} blocked",
+        )
+        ""
       end
 
       # --------------------------- code spans -----------------------------

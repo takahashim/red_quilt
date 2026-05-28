@@ -609,6 +609,26 @@ RSpec.describe RedQuilt do
       expect(html).to include('href="ssh://example.com"')
     end
 
+    it "blocks script-executing schemes in autolinks" do
+      # javascript: autolink should have its href blocked (the link text
+      # may still echo the raw scheme, but it is inert as escaped text).
+      html = described_class.render_html("<javascript:alert(1)>")
+      expect(html).to include('href=""')
+
+      # vbscript: and data: too
+      expect(described_class.render_html("<vbscript:msgbox>")).to include('href=""')
+      expect(described_class.render_html("<data:text/html,x>")).to include('href=""')
+    end
+
+    it "keeps benign custom schemes in autolinks (CommonMark conformance)" do
+      # Non-script schemes must still render as links per spec.
+      html = described_class.render_html("<made-up-scheme://foo,bar>")
+      expect(html).to include('href="made-up-scheme://foo,bar"')
+
+      expect(described_class.render_html("<a+b+c:d>")).to include('href="a+b+c:d"')
+      expect(described_class.render_html("<http://example.com>")).to include('href="http://example.com"')
+    end
+
     it "renders code block info string using first word only" do
       # info string with multiple words
       source = "```ruby test\ncode\n```"
