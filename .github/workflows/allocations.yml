@@ -1,0 +1,21 @@
+name: allocations
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Allocation-regression gate. The object counts asserted in
+# spec/allocation_regression_spec.rb differ between Ruby versions, so this
+# gate is pinned to a single version (kept in sync with the spec's
+# baseline) rather than run across the test matrix.
+jobs:
+  allocations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - run: RUN_ALLOCATION_SPECS=1 bundle exec rspec spec/allocation_regression_spec.rb

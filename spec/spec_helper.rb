@@ -12,4 +12,10 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+
+  # Allocation-regression specs are pinned to a single Ruby version (the
+  # object counts they assert differ across Ruby versions), so they're
+  # excluded from the normal multi-version suite. CI runs them in a
+  # dedicated job, and they can be run locally, via RUN_ALLOCATION_SPECS=1.
+  config.filter_run_excluding(:allocations) unless ENV["RUN_ALLOCATION_SPECS"] == "1"
 end
