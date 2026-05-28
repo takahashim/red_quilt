@@ -31,6 +31,17 @@ module RedQuilt
     #                   subsequent continuation lines must reach to stay
     #                   inside this item.
     def match(text)
+      # Fast reject before touching the regex engine: a list item is at
+      # most 3 leading spaces followed by a bullet (`* + -`) or a digit.
+      # This runs on every line, so bailing here avoids a MatchData (plus
+      # a `rest` substring and two marker-regex attempts) for the common
+      # non-list line.
+      i = 0
+      i += 1 while i < 3 && text.getbyte(i) == 0x20
+      c = text.getbyte(i)
+      return nil if c.nil?
+      return nil unless c == 0x2A || c == 0x2B || c == 0x2D || (c >= 0x30 && c <= 0x39)
+
       m = /\A( {0,3})/.match(text)
       leading = m[1].length
       rest = text[leading..]

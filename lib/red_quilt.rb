@@ -66,7 +66,12 @@ module RedQuilt
     # - line endings: \r\n and lone \r -> \n (spec defines all three as line endings)
     # - NUL (U+0000) -> U+FFFD (spec requires this replacement for security)
     def normalize_input(source)
-      source.gsub(/\r\n?/, "\n").gsub(NUL_CHAR, REPLACEMENT_CHAR)
+      # Both substitutions rewrite the whole document, so skip each scan
+      # (and its full-string copy) when the trigger byte is absent -- the
+      # common case is LF-only text with no NUL.
+      source = source.gsub(/\r\n?/, "\n") if source.include?("\r")
+      source = source.gsub(NUL_CHAR, REPLACEMENT_CHAR) if source.include?(NUL_CHAR)
+      source
     end
   end
 end
