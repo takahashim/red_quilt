@@ -1,19 +1,49 @@
 module RedQuilt
   VERSION: String
 
-  def self.parse: (String source, ?allow_html: bool) -> Document
-  def self.render_html: (String source, ?allow_html: bool) -> String
+  class Error < StandardError
+  end
+
+  def self.parse: (String source,
+                   ?allow_html: bool,
+                   ?disallow_raw_html: bool,
+                   ?extended_autolinks: bool,
+                   ?footnotes: bool,
+                   ?lint: bool) -> Document
+
+  def self.render_html: (String source,
+                         ?allow_html: bool,
+                         ?disallow_raw_html: bool,
+                         ?extended_autolinks: bool,
+                         ?footnotes: bool,
+                         ?lint: bool) -> String
 
   class Document
     attr_reader source: String
     attr_reader arena: Arena
     attr_reader root_id: Integer
+    attr_reader references: Hash[String, Hash[Symbol, untyped]]
+    attr_reader footnotes: FootnoteRegistry?
 
-    def root: () -> NodeRef
-    def to_html: () -> String
-    def to_ast: () -> Hash[Symbol, untyped]
+    def initialize: (String source, Arena arena, Integer root_id,
+                     ?allow_html: bool,
+                     ?disallow_raw_html: bool,
+                     ?references: Hash[String, Hash[Symbol, untyped]],
+                     ?footnotes: FootnoteRegistry?) -> void
+
     def allow_html?: () -> bool
+    def disallow_raw_html?: () -> bool
+    def root: () -> NodeRef
+    def walk: () { (NodeRef) -> void } -> void
+            | () -> Enumerator[NodeRef, void]
+    def to_html: (?standalone: bool, ?title: String?, ?lang: String,
+                  ?css: String?, ?theme: Symbol?) -> String
+    def to_ast: () -> Hash[Symbol, untyped]
+    def to_json: (*untyped) -> String
+    def to_mdast: () -> Hash[String, untyped]
+    def first_heading_text: () -> String?
     def source_map: () -> SourceMap
+    def diagnostics: () -> Array[Diagnostic]
   end
 
   class NodeRef
@@ -22,18 +52,83 @@ module RedQuilt
     attr_reader document: Document
     attr_reader node_id: Integer
 
+    def initialize: (Document document, Integer node_id) -> void
+    def each: () { (NodeRef) -> void } -> void
+            | () -> Enumerator[NodeRef, void]
     def type: () -> Symbol
     def children: () -> Array[NodeRef]
     def walk: () { (NodeRef) -> void } -> void
-    def walk: () -> Enumerator[NodeRef, void]
-    def find_all: (Symbol type) -> Array[NodeRef]
-    def to_h: () -> Hash[Symbol, untyped]
+            | () -> Enumerator[NodeRef, void]
     def text: () -> String?
     def source_span: () -> SourceSpan?
+    def find_all: (Symbol type) -> Array[NodeRef]
     def source_location: () -> { start_line: Integer, start_column: Integer, end_line: Integer, end_column: Integer }?
+    def to_h: () -> Hash[Symbol, untyped]
   end
 
+  # Low-level parallel-array storage for the AST. See docs/arena-usage.ja.md.
   class Arena
+    NO_NODE: Integer
+
+    class IntegrityError < StandardError
+    end
+
+    attr_reader source: String
+
+    def initialize: (String source) -> void
+
+    # Structure mutators. The child/insert/detach helpers return the
+    # affected node id; update_* / reparent return values are incidental.
+    def add_node: (Integer type,
+                   ?source_start: Integer, ?source_len: Integer,
+                   ?int1: Integer, ?int2: Integer, ?int3: Integer,
+                   ?str1: String?, ?str2: String?) -> Integer
+    def append_child: (Integer parent_id, Integer child_id) -> Integer
+    def insert_before: (Integer parent_id, Integer ref_id, Integer new_id) -> Integer
+    def detach: (Integer child_id) -> Integer
+    def reparent: (Integer new_parent_id, Integer first_id, Integer last_id) -> void
+    def update_span: (Integer id, Integer start_byte, Integer end_byte) -> void
+    def update_str1: (Integer id, String? value) -> void
+    def update_int3: (Integer id, Integer value) -> void
+
+    # Raw id accessors (may return NO_NODE)
+    def raw_parent_id: (Integer id) -> Integer
+    def raw_first_child_id: (Integer id) -> Integer
+    def raw_last_child_id: (Integer id) -> Integer
+    def raw_next_sibling_id: (Integer id) -> Integer
+    def raw_prev_sibling_id: (Integer id) -> Integer
+
+    # Column accessors
+    def type: (Integer id) -> Integer
+    def type_name: (Integer id) -> Symbol
+    def source_start: (Integer id) -> Integer
+    def source_len: (Integer id) -> Integer
+    def source_end: (Integer id) -> Integer
+    def int1: (Integer id) -> Integer
+    def int2: (Integer id) -> Integer
+    def int3: (Integer id) -> Integer
+    def str1: (Integer id) -> String?
+    def str2: (Integer id) -> String?
+
+    # Semantic accessors
+    def source_span: (Integer id) -> SourceSpan?
+    def text: (Integer id) -> String?
+
+    # Traversal
+    def each_child: (Integer id) { (Integer child_id) -> void } -> self
+    def child_ids: (Integer id) -> Enumerator[Integer, void]
+
+    def check_integrity!: (Integer root_id) -> self
+  end
+
+  class SourceSpan
+    attr_reader start_byte: Integer
+    attr_reader end_byte: Integer
+
+    def initialize: (Integer start_byte, Integer end_byte) -> void
+    def length: () -> Integer
+    def ==: (untyped other) -> bool
+    def to_h: () -> { start_byte: Integer, end_byte: Integer }
   end
 
   class SourceMap
@@ -41,5 +136,86 @@ module RedQuilt
     def line_column: (Integer byte_offset) -> { line: Integer, column: Integer }
   end
 
-  SourceSpan = Data[Integer, Integer]
+  class Diagnostic
+    SEVERITIES: Array[Symbol]
+
+    attr_reader severity: Symbol
+    attr_reader rule: Symbol
+    attr_reader message: String
+    attr_reader source_span: SourceSpan?
+
+    def initialize: (severity: Symbol, rule: Symbol, message: String,
+                     ?source_span: SourceSpan?) -> void
+    def to_h: () -> Hash[Symbol, untyped]
+    def ==: (untyped other) -> bool
+  end
+
+  # Integer NodeType constants (block: 1, 10-22; inline: 100-112).
+  module NodeType
+    DOCUMENT: Integer
+    PARAGRAPH: Integer
+    HEADING: Integer
+    THEMATIC_BREAK: Integer
+    BLOCKQUOTE: Integer
+    LIST: Integer
+    LIST_ITEM: Integer
+    CODE_BLOCK: Integer
+    HTML_BLOCK: Integer
+    TABLE: Integer
+    TABLE_ROW: Integer
+    TABLE_CELL: Integer
+    FOOTNOTE_DEFINITION: Integer
+    FOOTNOTES_SECTION: Integer
+    TEXT: Integer
+    SOFTBREAK: Integer
+    HARDBREAK: Integer
+    EMPHASIS: Integer
+    STRONG: Integer
+    CODE_SPAN: Integer
+    LINK: Integer
+    IMAGE: Integer
+    HTML_INLINE: Integer
+    STRIKETHROUGH: Integer
+    FOOTNOTE_REFERENCE: Integer
+
+    TYPE_NAMES: Hash[Integer, Symbol]
+
+    def self.name_for: (Integer type) -> Symbol
+  end
+
+  # Bundled stylesheets for standalone HTML output (`:none` => no CSS).
+  # `name` is coerced with `to_sym`, so String names ("default") work too.
+  module Theme
+    NAMES: Array[Symbol]
+
+    def self.css: (Symbol | String | nil name) -> String?
+  end
+
+  # Shared footnote state (created per parse when `footnotes: true`).
+  class FootnoteRegistry
+    def initialize: () -> void
+    def define: (String label, Integer node_id) -> bool
+    def defined?: (String label) -> bool
+    def definition_node: (String label) -> Integer?
+    def reference: (String label) -> [ Integer, Integer ]?
+    def number: (String label) -> Integer?
+    def occurrences: (String label) -> Integer
+    def referenced_labels: () -> Array[String]
+    def any_referenced?: () -> bool
+  end
+
+  module CLI
+    # Duck types for the injected IO objects (tests pass StringIO, not IO).
+    interface _Reader
+      def read: () -> String?
+    end
+
+    interface _Writer
+      def write: (*untyped) -> Integer
+      def puts: (*untyped) -> void
+      def <<: (untyped) -> self
+    end
+
+    def self.run: (Array[String] argv, ?stdin: _Reader, ?stdout: _Writer, ?stderr: _Writer) -> Integer
+  end
 end
