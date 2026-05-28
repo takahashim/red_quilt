@@ -25,23 +25,6 @@ module RedQuilt
       @root_id
     end
 
-    private
-
-    # Byte values that can begin a non-paragraph block (after 0-3
-    # leading spaces). Lines whose first non-space byte is NOT in this
-    # set go straight to parse_paragraph, skipping all eight specific
-    # block-start predicates.
-    #
-    # Members: `#` (ATX), ``` ` ```/`~` (fences), `*`/`-`/`+`/`_` (thematic
-    # & list markers), `0`-`9` (ordered list), `[` (ref def), `>` (blockquote),
-    # `<` (HTML block), `\t` (indented code, when a tab provides indent).
-    BLOCK_START_BYTES = begin
-      a = Array.new(256, false)
-      [0x23, 0x60, 0x7E, 0x2A, 0x2D, 0x2B, 0x5F, 0x5B, 0x3E, 0x3C, 0x09].each { |b| a[b] = true }
-      (0x30..0x39).each { |b| a[b] = true }
-      a.freeze
-    end
-
     # parse_lines returns true if it encountered a blank line BETWEEN
     # two block-level constructs at this scope. parse_list uses that to
     # decide an item's looseness — the spec says an item is loose when
@@ -107,6 +90,74 @@ module RedQuilt
       blank_then_block
     end
 
+    # Methods the collaborator parsers (List::Parser, Blockquote::Parser,
+    # FootnoteDefinition::Parser) call back into.
+
+    # A line at less-than-N indent breaks lazy continuation when it would
+    # itself start a new block (heading, thematic break, fenced/indented
+    # code, html block, blockquote, list item, table). Same predicate as
+    # paragraph_interrupt? minus the "index > 0" guard.
+    def lazy_break?(lines, index)
+      line = lines[index]
+      return true if atx_heading(line.content)
+      return true if thematic_break?(line.content)
+      return true if fenced_code_start(line.content)
+      # HTML type 7 doesn't break lazy continuation either.
+      if (type = html_block_type(line.content)) && type != 7
+        return true
+      end
+      return true if Blockquote.match?(line.content)
+      if (li = List.match(line.content)) && List.interrupts_paragraph?(li)
+        return true
+      end
+      return true if table_start?(lines, index)
+
+      false
+    end
+
+    # Thematic break per CommonMark: 0-3 spaces of indent, then 3+ of
+    # the same character (`*`, `-`, or `_`) optionally separated by
+    # whitespace, and nothing else on the line. Lines indented 4+ spaces
+    # are indented code, not thematic breaks.
+    THEMATIC_BREAK_RE = /\A {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})\z/
+
+    private_constant :THEMATIC_BREAK_RE
+
+    def thematic_break?(text)
+      THEMATIC_BREAK_RE.match?(text)
+    end
+
+    def paragraph_eligible_line?(content)
+      return false if indented_code_line?(content)
+      return false if fenced_code_start(content)
+      return false if atx_heading(content)
+      return false if thematic_break?(content)
+      return false if html_block_start?(content)
+      return false if List.match(content)
+      return false if Blockquote.match?(content)
+
+      true
+    end
+
+    private
+
+    # Byte values that can begin a non-paragraph block (after 0-3
+    # leading spaces). Lines whose first non-space byte is NOT in this
+    # set go straight to parse_paragraph, skipping all eight specific
+    # block-start predicates.
+    #
+    # Members: `#` (ATX), ``` ` ```/`~` (fences), `*`/`-`/`+`/`_` (thematic
+    # & list markers), `0`-`9` (ordered list), `[` (ref def), `>` (blockquote),
+    # `<` (HTML block), `\t` (indented code, when a tab provides indent).
+    BLOCK_START_BYTES = begin
+      a = Array.new(256, false)
+      [0x23, 0x60, 0x7E, 0x2A, 0x2D, 0x2B, 0x5F, 0x5B, 0x3E, 0x3C, 0x09].each { |b| a[b] = true }
+      (0x30..0x39).each { |b| a[b] = true }
+      a.freeze
+    end
+
+    private_constant :BLOCK_START_BYTES
+
     # Returns true when `content` cannot start any non-paragraph block,
     # so the slow predicate fan-out in parse_lines can be skipped. The
     # check is intentionally conservative: anything ambiguous returns
@@ -130,40 +181,6 @@ module RedQuilt
       return false if content.include?("|")
 
       true
-    end
-
-    def paragraph_eligible_line?(content)
-      return false if indented_code_line?(content)
-      return false if fenced_code_start(content)
-      return false if atx_heading(content)
-      return false if thematic_break?(content)
-      return false if html_block_start?(content)
-      return false if List.match(content)
-      return false if Blockquote.match?(content)
-
-      true
-    end
-
-    # A line at less-than-N indent breaks lazy continuation when it would
-    # itself start a new block (heading, thematic break, fenced/indented
-    # code, html block, blockquote, list item, table). Same predicate as
-    # paragraph_interrupt? minus the "index > 0" guard.
-    def lazy_break?(lines, index)
-      line = lines[index]
-      return true if atx_heading(line.content)
-      return true if thematic_break?(line.content)
-      return true if fenced_code_start(line.content)
-      # HTML type 7 doesn't break lazy continuation either.
-      if (type = html_block_type(line.content)) && type != 7
-        return true
-      end
-      return true if Blockquote.match?(line.content)
-      if (li = List.match(line.content)) && List.interrupts_paragraph?(li)
-        return true
-      end
-      return true if table_start?(lines, index)
-
-      false
     end
 
     def parse_fenced_code(parent_id, lines, index, fence)
@@ -235,6 +252,8 @@ module RedQuilt
       4 => ">",
       5 => "]]>",
     }.freeze
+
+    private_constant :HTML_BLOCK_FIXED_TERMINATORS
 
     def parse_html_block(parent_id, lines, index)
       start_index = index
@@ -510,6 +529,8 @@ module RedQuilt
     #   content by whitespace (so `# foo#` keeps the `#`)
     ATX_HEADING_RE = /\A {0,3}(\#{1,6})(?:[ \t]+\#+[ \t]*|[ \t]+(.*?)(?:[ \t]+\#+)?[ \t]*|[ \t]*)\z/
 
+    private_constant :ATX_HEADING_RE
+
     def atx_heading(text)
       match = ATX_HEADING_RE.match(text)
       return unless match
@@ -517,16 +538,6 @@ module RedQuilt
       content = match[2].to_s
       content_index = content.empty? ? text.length : (text.index(content) || text.bytesize)
       { level: match[1].length, content: content, content_start: content_index }
-    end
-
-    # Thematic break per CommonMark: 0-3 spaces of indent, then 3+ of
-    # the same character (`*`, `-`, or `_`) optionally separated by
-    # whitespace, and nothing else on the line. Lines indented 4+ spaces
-    # are indented code, not thematic breaks.
-    THEMATIC_BREAK_RE = /\A {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})\z/
-
-    def thematic_break?(text)
-      THEMATIC_BREAK_RE.match?(text)
     end
 
     def fenced_code_start(text)
@@ -637,6 +648,8 @@ module RedQuilt
     HTML_BLOCK_TYPE_6_RE =
       %r{\A</?(?:#{HTML_BLOCK_TYPE_6_NAMES.join('|')})(?:[ \t]|>|/>|\z)}i
 
+    private_constant :HTML_BLOCK_TYPE_6_NAMES, :HTML_BLOCK_TYPE_6_RE
+
     def table_start?(lines, index)
       return false if index + 1 >= lines.length
       return false unless table_row?(lines[index].content)
@@ -679,6 +692,8 @@ module RedQuilt
     }x
     HTML_TYPE_7_CLOSING_TAG_RE = %r{\A</[A-Za-z][A-Za-z0-9-]*[ \t\r\n]*>\z}
 
+    private_constant :HTML_TYPE_7_OPEN_TAG_RE, :HTML_TYPE_7_CLOSING_TAG_RE
+
     def valid_html_tag?(text)
       # Fast reject: every type-7 tag must begin with `<`.
       return false unless text.start_with?("<")
@@ -705,11 +720,5 @@ module RedQuilt
     def span_len(line)
       line.end_byte - line.start_byte
     end
-
-    # Methods the collaborator parsers (List::Parser, Blockquote::Parser,
-    # FootnoteDefinition::Parser) call back into. Public so they can be
-    # invoked directly rather than via __send__; not part of the gem's
-    # public API.
-    public :parse_lines, :lazy_break?, :thematic_break?, :paragraph_eligible_line?
   end
 end
