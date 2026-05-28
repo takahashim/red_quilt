@@ -21,29 +21,12 @@ module RedQuilt
       end
       TRAILING_SPACE_RE = (1..8).map { |n| / {#{n},}\z/ }.freeze
 
-      class Delimiter
-        attr_accessor :node_id, :char, :count, :can_open, :can_close
+      # `count` is the CommonMark delimiter-run length; a Delimiter is
+      # never enumerated, so shadowing Struct#count (from Enumerable) is
+      # intentional rather than a footgun.
+      Delimiter = Struct.new(:node_id, :char, :count, :can_open, :can_close) # rubocop:disable Lint/StructNewOverride
 
-        def initialize(node_id, char, count, can_open, can_close)
-          @node_id = node_id
-          @char = char
-          @count = count
-          @can_open = can_open
-          @can_close = can_close
-        end
-      end
-
-      class Bracket
-        attr_accessor :token_id, :node_id, :image, :active, :delim_stack_size
-
-        def initialize(token_id, node_id, image, active, delim_stack_size)
-          @token_id = token_id
-          @node_id = node_id
-          @image = image
-          @active = active
-          @delim_stack_size = delim_stack_size
-        end
-      end
+      Bracket = Struct.new(:token_id, :node_id, :image, :active, :delim_stack_size)
 
       # track_source: when true, arena nodes carry the byte ranges supplied
       # by the lexer. When false (used for inputs whose source has been
