@@ -37,85 +37,53 @@ RedQuilt.render_html("Hi <em>tag</em>", allow_html: true)
 # => "<p>Hi <em>tag</em></p>\n"
 ```
 
-## API Reference
+### Options
 
-### Document
+`RedQuilt.parse` and `RedQuilt.render_html` accept:
 
-```ruby
-doc = RedQuilt.parse("# Title\n\nBody")
+| Option | Default | Effect |
+|--------|---------|--------|
+| `allow_html:` | `false` | Pass raw HTML through instead of escaping it |
+| `disallow_raw_html:` | `false` | With `allow_html`, still neutralize GFM's dangerous tags (`<script>`, `<iframe>`, …) |
+| `extended_autolinks:` | `false` | GFM: linkify bare `http(s)://` / `www.` / email addresses |
+| `footnotes:` | `false` | GFM footnotes (see below) |
+| `lint:` | `false` | Collect lint diagnostics (empty links, missing image alt, heading-level skips) |
 
-doc.root              # Root node (NodeRef)
-doc.walk              # Traverse all nodes (block: { |node| ... } or Enumerator)
-doc.to_html           # Render as HTML
-doc.to_ast            # Export complete AST as Hash
-doc.to_json           # Export as MDAST-compatible JSON
-doc.to_mdast          # Export as MDAST Hash
-doc.source_map        # Line/column lookup (lazy memoized)
-doc.allow_html?       # Check HTML pass-through setting
-```
-
-### NodeRef (AST node wrapper)
+### Footnotes (opt-in)
 
 ```ruby
-node = doc.root.children.first
+RedQuilt.render_html(<<~MD, footnotes: true)
+  Here is a reference.[^1]
 
-# Traversal
-node.type             # :heading, :paragraph, :link, etc. (Symbol)
-node.children         # Array[NodeRef]
-node.walk             # Enumerator[NodeRef] or { |node| ... } block
-node.find_all(:link)  # Array[NodeRef] with matching type
-node.text             # String (concatenated child text)
-
-# Position information (byte offset)
-node.source_span      # SourceSpan with start_byte, end_byte
-
-# Position information (line/column)
-node.source_location  # { start_line, start_column, end_line, end_column }
-                      # line: 1-indexed, column: 0-indexed (character-based)
-
-# AST export
-node.to_h             # Export subtree as Hash[Symbol, untyped]
+  [^1]: And the footnote text.
+MD
+# The reference becomes a superscript link, and a trailing
+# <section class="footnotes"> lists the referenced definitions (in
+# first-reference order) with backrefs.
 ```
 
-### SourceSpan
+### Diagnostics
+
+Parsing never raises on malformed input; warnings are collected on the document.
 
 ```ruby
-span = node.source_span
-span.start_byte       # Integer (0-indexed byte offset)
-span.end_byte         # Integer (exclusive)
-span.length           # Computed: end_byte - start_byte
+doc = RedQuilt.parse("[x](javascript:alert(1))", lint: true)
+doc.diagnostics.map(&:rule)   # => [:unsafe_url]
+doc.diagnostics.first.severity # => :warning
 ```
 
-## Supported Syntax
+## Documentation
 
-### Block elements
-
-- Paragraphs: Plain text blocks
-- Headings: ATX headings (`# Title`)
-- Thematic breaks: `---`, `***`, `___`
-- Code blocks: Indented and fenced (with info string)
-- Block quotes: `> quote text`
-- Lists: Ordered (`1.`) and unordered (`-`, `*`, `+`)
-- List items: Nested blocks, tight/loose detection
-- Tables: GFM syntax with header/body rows
-- Raw HTML blocks: 7 types (script, comment, etc.)
-- Link reference definitions: `[foo]: /url "title"`
-
-### Inline elements
-
-- Text: Plain strings
-- Emphasis/Strong: `*em*`, `**strong**`, `_em_`, `__strong__`
-- Code spans: `` `code` ``
-- Links: `[text](/url)`, `[text](/url "title")`, reference links
-- Images: `![alt](/url)`, `![alt](/url "title")`, reference images
-- Soft/Hard line breaks: Implicit (soft) and explicit `\` or two spaces
-- Raw HTML inline: `<a href="#">link</a>`
-- Autolinks: `<http://example.com>`, `<user@example.com>`
-- Character references: `&amp;`, `&#x27;`, etc.
+- [API reference](docs/api.md) — `Document` / `NodeRef` / `SourceSpan`, supported syntax, and usage examples
+- [Architecture overview](docs/architecture.ja.md) (日本語)
+- [Arena usage guide](docs/arena-usage.ja.md) (日本語)
+- [CommonMark conformance notes](docs/commonmark-conformance.ja.md) (日本語)
 
 ## CommonMark Compatibility
 
 RedQuilt achieves 100% compliance with the CommonMark v0.31.2 specification.
+See the [conformance notes](docs/commonmark-conformance.ja.md) for GFM
+extensions and intentional deviations.
 
 ## Command-line Tool
 
@@ -139,8 +107,11 @@ redquilt --format json input.md
 # Standalone HTML document with title
 redquilt --standalone --title "My Document" input.md
 
-# Enable GFM extended autolinks
-redquilt --extended-autolinks input.md
+# Enable GFM extended autolinks / footnotes
+redquilt --extended-autolinks --footnotes input.md
+
+# Standalone page with the bare template (no embedded CSS)
+redquilt --theme none input.md
 ```
 
 ### Options
@@ -148,12 +119,16 @@ redquilt --extended-autolinks input.md
 ```
 --format FORMAT          Output format: html (default), ast, json
 --allow-html             Pass raw HTML through to the output
+--disallow-raw-html      With --allow-html, filter GFM's dangerous tags
 --extended-autolinks     Linkify bare URLs and email addresses (GFM)
+--footnotes              Enable GFM footnotes
+--lint                   Collect lint diagnostics
 --[no-]standalone        Wrap HTML in full document (default: on)
 --auto-title             Use the first heading's text as <title>
 --title TITLE            Explicit <title> text
 --lang LANG              html lang attribute (default: "en")
 --css URL                Add a stylesheet link
+--theme THEME            Embedded stylesheet: default (default) or none
 --diagnostics            Print diagnostics to stderr
 --diagnostics-only       Print diagnostics only (suppress output)
 -h, --help               Show help
@@ -187,6 +162,8 @@ In link/image destinations, only these schemes are permitted:
 
 All other schemes (`javascript:`, `data:`, `vbscript:`, etc.) are blocked by replacing the URL with an empty string.
 
+Autolinks (`<scheme:...>`) follow CommonMark and allow arbitrary schemes, so they use a denylist instead: only the script-executing schemes `javascript:`, `vbscript:`, and `data:` are blocked.
+
 ### Opting into HTML pass-through
 
 ```ruby
@@ -194,50 +171,6 @@ All other schemes (`javascript:`, `data:`, `vbscript:`, etc.) are blocked by rep
 RedQuilt.render_html(user_markdown, allow_html: true)
 
 # This passes HTML blocks and inline tags through unchanged
-```
-
-## Usage Examples
-
-### Extract all headings
-
-```ruby
-doc = RedQuilt.parse(source)
-headings = doc.root.find_all(:heading)
-
-headings.each do |node|
-  level = node.to_h[:attributes][:level]
-  text = node.text
-  puts "#{'#' * level} #{text}"
-end
-```
-
-### Walk the AST with line numbers
-
-```ruby
-doc = RedQuilt.parse(source)
-
-doc.root.walk do |node|
-  loc = node.source_location
-  if loc
-    puts "#{node.type} at line #{loc[:start_line]}"
-  end
-end
-```
-
-### Export and transform
-
-```ruby
-doc = RedQuilt.parse("# Title\n\nBody with [link](/url)")
-ast = doc.to_ast
-
-# Print AST structure (for debugging)
-pp ast
-
-# Process nodes
-doc.root.find_all(:link).each do |link|
-  attrs = link.to_h[:attributes]
-  puts "Link: #{link.text} → #{attrs[:destination]}"
-end
 ```
 
 ## Development

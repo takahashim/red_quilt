@@ -11,10 +11,14 @@ Gem::Specification.new do |spec|
   spec.summary = "CommonMark-based Markdown processor written in pure Ruby"
   spec.description = "A modern Markdown document processor in pure Ruby, with an arena-style AST and full CommonMark spec test suite compliance."
   spec.homepage = "https://github.com/takahashim/red_quilt"
+  spec.license = "MIT"
   spec.required_ruby_version = ">= 3.3.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
+  spec.metadata["documentation_uri"] = "#{spec.homepage}#readme"
+  spec.metadata["rubygems_mfa_required"] = "true"
 
   gemspec = File.basename(__FILE__)
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
