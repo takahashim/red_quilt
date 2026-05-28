@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "optparse"
+require "red_quilt"
 
 module RedQuilt
   # Entry point for the `redquilt` executable. Defined as a module-level
