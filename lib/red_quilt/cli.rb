@@ -32,7 +32,10 @@ module RedQuilt
       title: nil,
       lang: "en",
       css: nil,
+      theme: :default,
     }.freeze
+
+    THEMES = %i[none default].freeze
 
     FORMATS = %i[html ast json].freeze
 
@@ -107,6 +110,10 @@ module RedQuilt
         opts.on("--css URL", "Add a stylesheet link (standalone only)") do |u|
           options[:css] = u
         end
+        opts.on("--theme THEME", THEMES,
+                "Embedded stylesheet: default (the default) or none (bare HTML)") do |t|
+          options[:theme] = t
+        end
         opts.on("--diagnostics", "Also print diagnostics to stderr") do
           options[:diagnostics] = true
         end
@@ -158,6 +165,7 @@ module RedQuilt
         title: title,
         lang: options[:lang],
         css: options[:css],
+        theme: options[:theme],
       )
     end
 

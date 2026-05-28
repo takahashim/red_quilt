@@ -14,11 +14,12 @@ RSpec.describe RedQuilt::CLI do
   end
 
   describe "default invocation (HTML output via stdin)" do
-    it "renders a full standalone HTML document by default" do
+    it "renders a full standalone HTML document with the default theme" do
       code, out, err = run([], input: "# Hello\n")
       expect(code).to eq(0)
       expect(out).to start_with("<!DOCTYPE html>\n")
       expect(out).to include("<title></title>")
+      expect(out).to include("<style>")
       expect(out).to include("<h1>Hello</h1>")
       expect(out).to end_with("</html>\n")
       expect(err).to eq("")
@@ -54,6 +55,23 @@ RSpec.describe RedQuilt::CLI do
       code, out, _ = run(["--css", "/s.css"], input: "hi\n")
       expect(code).to eq(0)
       expect(out).to include(%(<link rel="stylesheet" href="/s.css">))
+    end
+
+    it "embeds the bundled stylesheet by default and via --theme default" do
+      expect(run([], input: "hi\n")[1]).to include("<style>")
+      expect(run(["--theme", "default"], input: "hi\n")[1]).to include("<style>")
+    end
+
+    it "emits bare HTML (no embedded stylesheet) with --theme none" do
+      code, out, _ = run(["--theme", "none"], input: "hi\n")
+      expect(code).to eq(0)
+      expect(out).not_to include("<style>")
+    end
+
+    it "rejects an unknown theme" do
+      code, _, err = run(["--theme", "bogus"], input: "hi\n")
+      expect(code).not_to eq(0)
+      expect(err).not_to be_empty
     end
   end
 

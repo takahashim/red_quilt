@@ -1,0 +1,87 @@
+/* RedQuilt default theme — a compact, readable stylesheet for standalone
+   HTML output. Intentionally minimal: no syntax highlighting, no JS. */
+
+body {
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #1f2328;
+  background: #ffffff;
+  word-wrap: break-word;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 1.6em 0 0.6em;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+h1 { font-size: 1.9em; }
+h2 { font-size: 1.5em; }
+h3 { font-size: 1.25em; }
+h1, h2 { padding-bottom: 0.3em; border-bottom: 1px solid #d0d7de; }
+
+p, ul, ol, blockquote, table, pre { margin: 0 0 1rem; }
+
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul, ol { padding-left: 1.6em; }
+li + li { margin-top: 0.2em; }
+
+blockquote {
+  margin-left: 0;
+  padding: 0 1em;
+  color: #59636e;
+  border-left: 0.25em solid #d0d7de;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: #eff1f3;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+pre {
+  background: #f6f8fa;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow: auto;
+}
+
+pre code { background: none; padding: 0; font-size: 0.875em; }
+
+table { border-collapse: collapse; }
+th, td { padding: 0.4em 0.8em; border: 1px solid #d0d7de; }
+th { background: #f6f8fa; }
+
+hr { height: 1px; margin: 2rem 0; border: 0; background: #d0d7de; }
+
+img { max-width: 100%; }
+
+.footnotes {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  font-size: 0.9em;
+  color: #59636e;
+  border-top: 1px solid #d0d7de;
+}
+
+/* Follow the OS / browser preference for dark mode. */
+@media (prefers-color-scheme: dark) {
+  body { color: #e6edf3; background: #0d1117; }
+  a { color: #4493f8; }
+  h1, h2 { border-bottom-color: #30363d; }
+  blockquote { color: #9198a1; border-left-color: #30363d; }
+  code { background: #262c36; }
+  pre { background: #161b22; }
+  th, td { border-color: #30363d; }
+  th { background: #161b22; }
+  hr { background: #30363d; }
+  .footnotes { color: #9198a1; border-top-color: #30363d; }
+}

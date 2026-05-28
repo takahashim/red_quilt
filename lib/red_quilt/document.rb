@@ -41,12 +41,15 @@ module RedQuilt
     #   template with `<head>` (charset / title / optional stylesheet)
     #   and `<body>`. When false (the default), only the rendered body
     #   fragment is returned.
-    # title / lang / css: applied only when standalone is true.
-    def to_html(standalone: false, title: nil, lang: "en", css: nil)
+    # title / lang / css / theme: applied only when standalone is true.
+    # theme: a bundled stylesheet to inline (`:none` embeds nothing, keeping
+    #   the bare template; `:default` embeds RedQuilt's default theme). `css`
+    #   (an external stylesheet link) is independent and may be combined.
+    def to_html(standalone: false, title: nil, lang: "en", css: nil, theme: :none)
       body = Renderer::HTML.new(self).render
       return body unless standalone
 
-      wrap_standalone_html(body, title: title.to_s, lang: lang.to_s, css: css)
+      wrap_standalone_html(body, title: title.to_s, lang: lang.to_s, css: css, theme: Theme.css(theme))
     end
 
     def to_ast
@@ -82,13 +85,14 @@ module RedQuilt
 
     private
 
-    def wrap_standalone_html(body, title:, lang:, css:)
+    def wrap_standalone_html(body, title:, lang:, css:, theme:)
       out = +"<!DOCTYPE html>\n"
       out << %(<html lang="#{html_escape_attr(lang)}">\n)
       out << "<head>\n"
       out << %(<meta charset="utf-8">\n)
       out << "<title>#{html_escape_text(title)}</title>\n"
       out << %(<link rel="stylesheet" href="#{html_escape_attr(css)}">\n) if css
+      out << "<style>\n#{theme}</style>\n" if theme
       out << "</head>\n<body>\n"
       out << body
       out << "</body>\n</html>\n"
