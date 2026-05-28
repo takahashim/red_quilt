@@ -160,7 +160,7 @@ module RedQuilt
                       start_byte: pos, end_byte: nxt_pos + 1,
                       int1: 0, int2: 1)
           nxt_pos + 1
-        elsif ascii_punct?(nxt)
+        elsif Inline.ascii_punct_byte?(nxt)
           tokens.emit(TokenKind::ESCAPED_CHAR,
                       start_byte: pos, end_byte: nxt_pos + 1,
                       str1: nxt.chr)
@@ -274,17 +274,6 @@ module RedQuilt
       # replacement for U+0000 / surrogates / out-of-range codepoints.
       def decode_entity(raw)
         Inline.decode_entity(raw)
-      end
-
-      def ascii_punct?(byte)
-        # !-/ : 0x21..0x2F
-        # :-@ : 0x3A..0x40
-        # [-` : 0x5B..0x60
-        # {-~ : 0x7B..0x7E
-        (byte >= 0x21 && byte <= 0x2F) ||
-          (byte >= 0x3A && byte <= 0x40) ||
-          (byte >= 0x5B && byte <= 0x60) ||
-          (byte >= 0x7B && byte <= 0x7E)
       end
     end
   end

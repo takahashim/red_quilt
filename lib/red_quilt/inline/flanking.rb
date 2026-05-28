@@ -13,19 +13,13 @@ module RedQuilt
       # currency / math / other symbols form delimiter-run boundaries.
       UNICODE_PUNCT_RE = /\A[\p{P}\p{S}]\z/
 
-      # Fast-path lookup tables for ASCII bytes. Flanking inputs are mostly
-      # single-byte ASCII; the tables let us skip regex matches entirely
-      # on the hot path.
+      # Fast-path lookup table for ASCII whitespace. Flanking inputs are
+      # mostly single-byte ASCII; the table lets us skip regex matches
+      # entirely on the hot path. (ASCII punctuation uses the shared
+      # Inline::ASCII_PUNCT table.)
       ASCII_WHITESPACE = Array.new(128, false)
       [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20].each { |b| ASCII_WHITESPACE[b] = true }
       ASCII_WHITESPACE.freeze
-
-      ASCII_PUNCT = Array.new(128, false)
-      (0x21..0x2F).each { |b| ASCII_PUNCT[b] = true }
-      (0x3A..0x40).each { |b| ASCII_PUNCT[b] = true }
-      (0x5B..0x60).each { |b| ASCII_PUNCT[b] = true }
-      (0x7B..0x7E).each { |b| ASCII_PUNCT[b] = true }
-      ASCII_PUNCT.freeze
 
       module_function
 

@@ -420,7 +420,7 @@ module RedQuilt
             return nil
           when 0x5C
             nb = @source.getbyte(pos + 1)
-            if nb && ascii_punct_byte?(nb)
+            if nb && Inline.ascii_punct_byte?(nb)
               result << nb
               pos += 2
               next
@@ -445,7 +445,7 @@ module RedQuilt
           b = @source.getbyte(pos)
           if b == 0x5C
             nb = @source.getbyte(pos + 1)
-            if nb && ascii_punct_byte?(nb)
+            if nb && Inline.ascii_punct_byte?(nb)
               result << nb
               pos += 2
               next
@@ -494,7 +494,7 @@ module RedQuilt
           b = @source.getbyte(pos)
           if b == 0x5C
             nb = @source.getbyte(pos + 1)
-            if nb && ascii_punct_byte?(nb)
+            if nb && Inline.ascii_punct_byte?(nb)
               result << nb
               pos += 2
               next
@@ -574,14 +574,6 @@ module RedQuilt
       # vertical tab (U+000B) the way the generic \s class does.
       def link_tail_whitespace_byte?(b)
         b == 0x20 || b == 0x09
-      end
-
-      # ASCII punctuation per CommonMark (used for backslash escape).
-      def ascii_punct_byte?(b)
-        (b >= 0x21 && b <= 0x2F) ||
-          (b >= 0x3A && b <= 0x40) ||
-          (b >= 0x5B && b <= 0x60) ||
-          (b >= 0x7B && b <= 0x7E)
       end
 
       def hex_byte?(b)
