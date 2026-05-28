@@ -30,8 +30,8 @@ module RedQuilt
 
         prev = byte_pos - 1
         b = source.getbyte(prev)
-        # ASCII fast path: 1-byte chr (avoids byteslice).
-        return b.chr if b < 0x80
+        # ASCII fast path: shared 1-byte string (avoids byteslice + alloc).
+        return BYTE_CHR[b] if b < 0x80
 
         # Walk back at most 4 bytes to find the UTF-8 code point start.
         i = prev
@@ -50,7 +50,7 @@ module RedQuilt
         return nil if byte_pos >= range_end
 
         b = source.getbyte(byte_pos)
-        return b.chr if b < 0x80
+        return BYTE_CHR[b] if b < 0x80
 
         len = if b < 0xC0
                 1

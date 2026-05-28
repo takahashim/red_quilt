@@ -116,7 +116,9 @@ module RedQuilt
             result << bytes.getbyte(i + 2).chr.upcase
             i += 3
           elsif URL_SAFE_BYTE[b]
-            result << b.chr
+            # All URL-safe bytes are ASCII, so appending the integer
+            # codepoint matches b.chr without allocating a 1-char string.
+            result << b
             i += 1
           else
             result << format("%%%02X", b)
@@ -281,6 +283,10 @@ module RedQuilt
       end
 
       def decode_link_entities(raw)
+        # An entity reference always contains `&`; skip the regex scan and
+        # the new-string allocation when there's nothing to decode.
+        return raw unless raw.include?("&")
+
         raw.gsub(Inline::ENTITY_RE) { |m| Inline.decode_entity(m) }
       end
 

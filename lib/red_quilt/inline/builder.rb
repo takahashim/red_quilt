@@ -448,7 +448,7 @@ module RedQuilt
         count = @tokens.int2(token_id)
         flags = @tokens.int3(token_id)
 
-        char = char_byte.chr
+        char = Inline::BYTE_CHR[char_byte]
         text = char * count
         node_id = add_arena_node(
           NodeType::TEXT,

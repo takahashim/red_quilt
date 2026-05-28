@@ -24,6 +24,8 @@ module RedQuilt
       HTML_ESCAPE_RE = /[&<>"]/
 
       def escape_html(str)
+        return str unless HTML_ESCAPE_RE.match?(str)
+
         str.gsub(HTML_ESCAPE_RE, HTML_ESCAPE_TABLE)
       end
 

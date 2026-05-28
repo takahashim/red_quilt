@@ -19,6 +19,12 @@ module RedQuilt
       a.freeze
     end
 
+    # Frozen single-byte strings indexed by byte value, so hot paths that
+    # need the 1-char string for a byte (flanking classification, delimiter
+    # run chars) can reuse a shared object instead of allocating via
+    # Integer#chr on every call. Semantics match `byte.chr` exactly.
+    BYTE_CHR = Array.new(256) { |b| b.chr.freeze }.freeze
+
     module_function
 
     def ascii_punct_byte?(byte)
