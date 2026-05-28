@@ -13,12 +13,6 @@ module RedQuilt
     #      delimiter stack entries into EMPHASIS / STRONG nodes.
     class Builder
       SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
-      NIL_PAIR = [nil, nil].freeze
-      URL_SAFE_BYTE = begin
-        a = Array.new(256, false)
-        "-._~:/?#@!$&'()*+,;=".each_byte { |b| a[b] = true }
-        a.freeze
-      end
       TRAILING_SPACE_RE = (1..8).map { |n| / {#{n},}\z/ }.freeze
 
       # `count` is the CommonMark delimiter-run length; a Delimiter is
@@ -48,6 +42,7 @@ module RedQuilt
         @references = references
         @track_source = track_source
         @diagnostics = diagnostics
+        @link_scanner = LinkScanner.new(source)
       end
 
       def build(parent_id, tokens)
@@ -227,7 +222,7 @@ module RedQuilt
         link_id = add_arena_node(
           NodeType::LINK,
           @tokens.start_byte(id), @tokens.end_byte(id),
-          str1: normalize_link_uri(destination),
+          str1: @link_scanner.normalize_uri(destination),
         )
         @arena.append_child(@parent_id, link_id)
         @arena.append_child(link_id, @arena.add_node(NodeType::TEXT, str1: label))
@@ -318,7 +313,7 @@ module RedQuilt
         opener = @bracket_stack[opener_index]
         rbracket_end = @tokens.end_byte(rbracket_token_id)
 
-        match = try_inline_link(rbracket_end) ||
+        match = @link_scanner.inline_link(rbracket_end) ||
                 try_reference_link(opener, rbracket_token_id, rbracket_end)
         unless match
           @bracket_stack.delete_at(opener_index)
@@ -331,265 +326,6 @@ module RedQuilt
         next_token_after(match[:end_byte], search_from_id)
       end
 
-      # Parses an inline link body `(dest "title")` starting at the byte
-      # right after the link's closing `]`. Returns a hash with
-      # `:end_byte`, `:destination`, `:title` on success, or nil if the
-      # bytes don't form a valid inline link tail.
-      def try_inline_link(start_byte)
-        return nil unless byte_at(start_byte) == 0x28
-
-        pos = start_byte + 1
-        pos = skip_link_whitespace(pos)
-        return nil if pos.nil?
-
-        raw_dest = nil
-        next_byte = byte_at(pos)
-        if next_byte && next_byte != 0x29 && !link_tail_whitespace_byte?(next_byte) && next_byte != 0x0A
-          dest_result = parse_link_destination(pos)
-          return nil unless dest_result
-
-          raw_dest, pos = dest_result
-        end
-
-        ws_end = skip_link_whitespace(pos)
-        return nil if ws_end.nil?
-
-        raw_title = nil
-        if ws_end > pos
-          opener_byte = byte_at(ws_end)
-          if opener_byte && (opener_byte == 0x22 || opener_byte == 0x27 || opener_byte == 0x28)
-            title_result = parse_link_title(ws_end)
-            return nil unless title_result
-
-            raw_title, pos = title_result
-            pos = skip_link_whitespace(pos)
-            return nil if pos.nil?
-          else
-            pos = ws_end
-          end
-        else
-          pos = ws_end
-        end
-
-        return nil unless byte_at(pos) == 0x29
-
-        destination = raw_dest ? normalize_link_uri(raw_dest) : ""
-        title = raw_title ? decode_link_entities(raw_title) : nil
-        { end_byte: pos + 1, destination: destination, title: title }
-      end
-
-      # Consume ASCII whitespace starting at start_byte. Returns the
-      # position of the first non-whitespace byte, or nil if a blank line
-      # was crossed (link inner whitespace may span at most one newline).
-      def skip_link_whitespace(start_byte)
-        pos = start_byte
-        newlines = 0
-        while pos < @source.bytesize
-          b = @source.getbyte(pos)
-          if b == 0x0A
-            newlines += 1
-            return nil if newlines > 1
-          elsif !link_tail_whitespace_byte?(b)
-            break
-          end
-          pos += 1
-        end
-        pos
-      end
-
-      def parse_link_destination(start_byte)
-        if byte_at(start_byte) == 0x3C
-          parse_angle_bracket_destination(start_byte)
-        else
-          parse_raw_destination(start_byte)
-        end
-      end
-
-      # `<...>` form. Returns [string_with_backslash_escapes_applied, end_pos]
-      # or nil. Inside angles, `\` followed by ASCII punctuation escapes that
-      # punctuation; unescaped `<`, `>` or newlines bail the parse.
-      def parse_angle_bracket_destination(start_byte)
-        pos = start_byte + 1
-        result = String.new
-        while pos < @source.bytesize
-          b = @source.getbyte(pos)
-          case b
-          when 0x3E
-            return [result, pos + 1]
-          when 0x3C, 0x0A
-            return nil
-          when 0x5C
-            nb = @source.getbyte(pos + 1)
-            if nb && Inline.ascii_punct_byte?(nb)
-              result << nb
-              pos += 2
-              next
-            end
-            result << b
-          else
-            result << b
-          end
-          pos += 1
-        end
-        nil
-      end
-
-      # Raw destination: characters until ASCII whitespace, an ASCII
-      # control char, or an unbalanced `)`. Parens are allowed if balanced
-      # or backslash-escaped.
-      def parse_raw_destination(start_byte)
-        pos = start_byte
-        depth = 0
-        result = String.new
-        while pos < @source.bytesize
-          b = @source.getbyte(pos)
-          if b == 0x5C
-            nb = @source.getbyte(pos + 1)
-            if nb && Inline.ascii_punct_byte?(nb)
-              result << nb
-              pos += 2
-              next
-            end
-            result << b
-            pos += 1
-            next
-          end
-
-          break if link_tail_whitespace_byte?(b) || b < 0x20 || b == 0x7F
-
-          if b == 0x28
-            depth += 1
-          elsif b == 0x29
-            break if depth.zero?
-
-            depth -= 1
-          end
-
-          result << b
-          pos += 1
-        end
-
-        return nil if pos == start_byte
-        return nil if depth != 0
-
-        [result, pos]
-      end
-
-      # Parses a title delimited by `"`, `'`, or `(...)`. Returns
-      # [unescaped_string, end_pos] or nil. Backslash escapes apply for
-      # ASCII punctuation; a blank line inside a title voids the match.
-      def parse_link_title(start_byte)
-        opener = @source.getbyte(start_byte)
-        closer = case opener
-                 when 0x22 then 0x22
-                 when 0x27 then 0x27
-                 when 0x28 then 0x29
-                 else return nil
-                 end
-        balanced = opener == 0x28
-
-        pos = start_byte + 1
-        result = String.new
-        while pos < @source.bytesize
-          b = @source.getbyte(pos)
-          if b == 0x5C
-            nb = @source.getbyte(pos + 1)
-            if nb && Inline.ascii_punct_byte?(nb)
-              result << nb
-              pos += 2
-              next
-            end
-            result << b
-            pos += 1
-            next
-          end
-
-          if b == 0x0A
-            # Blank line (newline followed by only whitespace + newline) is forbidden.
-            look = pos + 1
-            while look < @source.bytesize && (@source.getbyte(look) == 0x20 || @source.getbyte(look) == 0x09)
-              look += 1
-            end
-            return nil if look < @source.bytesize && @source.getbyte(look) == 0x0A
-
-            result << b
-            pos += 1
-            next
-          end
-
-          # Inside `(...)` titles, an unescaped opening `(` invalidates the match.
-          return nil if balanced && b == 0x28
-
-          if b == closer
-            return [result, pos + 1]
-          end
-
-          result << b
-          pos += 1
-        end
-        nil
-      end
-
-      # Percent-encodes bytes not in the URL-safe set, decodes HTML
-      # entities first, and preserves (uppercasing) existing `%XX`.
-      def normalize_link_uri(raw)
-        decoded = decode_link_entities(raw)
-        bytes = decoded.b
-        result = +""
-        i = 0
-        size = bytes.bytesize
-        while i < size
-          b = bytes.getbyte(i)
-          if b == 0x25 && i + 2 < size &&
-             hex_byte?(bytes.getbyte(i + 1)) && hex_byte?(bytes.getbyte(i + 2))
-            result << "%"
-            result << bytes.getbyte(i + 1).chr.upcase
-            result << bytes.getbyte(i + 2).chr.upcase
-            i += 3
-          elsif url_safe_byte?(b)
-            result << b.chr
-            i += 1
-          else
-            result << format("%%%02X", b)
-            i += 1
-          end
-        end
-        result
-      end
-
-      def decode_link_entities(raw)
-        raw.gsub(Inline::ENTITY_RE) { |m| Inline.decode_entity(m) }
-      end
-
-      def byte_at(pos)
-        return nil if pos < 0 || pos >= @source.bytesize
-
-        @source.getbyte(pos)
-      end
-
-      # Whitespace allowed as a link-tail separator per CommonMark 6.3:
-      # "spaces, tabs, and up to one line ending". Line endings are
-      # counted by the caller, so this predicate intentionally matches
-      # only space and tab -- it must NOT match form feed (U+000C) or
-      # vertical tab (U+000B) the way the generic \s class does.
-      def link_tail_whitespace_byte?(b)
-        b == 0x20 || b == 0x09
-      end
-
-      def hex_byte?(b)
-        (b >= 0x30 && b <= 0x39) ||
-          (b >= 0x41 && b <= 0x46) ||
-          (b >= 0x61 && b <= 0x66)
-      end
-
-      def url_safe_byte?(b)
-        return true if b >= 0x30 && b <= 0x39
-        return true if b >= 0x41 && b <= 0x5A
-        return true if b >= 0x61 && b <= 0x7A
-
-        URL_SAFE_BYTE[b]
-      end
-
       def try_reference_link(opener, rbracket_token_id, start_byte)
         label_start = @tokens.end_byte(opener.token_id)
         label_end = @tokens.start_byte(rbracket_token_id)
@@ -597,7 +333,7 @@ module RedQuilt
         return nil if ReferenceDefinition.label_too_long?(text_label)
 
         if start_byte < @source.bytesize && @source.getbyte(start_byte) == 0x5B
-          ref_label, after_byte = read_reference_label(start_byte)
+          ref_label, after_byte = @link_scanner.reference_label(start_byte)
           return nil unless after_byte
 
           lookup = ref_label.empty? ? text_label : ref_label
@@ -615,7 +351,7 @@ module RedQuilt
           end
           return {
             end_byte: after_byte,
-            destination: normalize_link_uri(ref[:destination].to_s),
+            destination: @link_scanner.normalize_uri(ref[:destination].to_s),
             title: ref[:title],
           }
         end
@@ -625,32 +361,9 @@ module RedQuilt
 
         {
           end_byte: start_byte,
-          destination: normalize_link_uri(ref[:destination].to_s),
+          destination: @link_scanner.normalize_uri(ref[:destination].to_s),
           title: ref[:title],
         }
-      end
-
-      def read_reference_label(start_byte)
-        return NIL_PAIR unless @source.getbyte(start_byte) == 0x5B
-
-        i = start_byte + 1
-        while i < @source.bytesize
-          b = @source.getbyte(i)
-          if b == 0x5D
-            label = @source.byteslice(start_byte + 1, i - start_byte - 1).to_s
-            return NIL_PAIR if ReferenceDefinition.label_too_long?(label)
-
-            return [label, i + 1]
-          elsif b == 0x5B
-            # An unescaped `[` inside a reference label voids the form.
-            return NIL_PAIR
-          elsif b == 0x5C && i + 1 < @source.bytesize
-            i += 2
-            next
-          end
-          i += 1
-        end
-        NIL_PAIR
       end
 
       def finalize_link(opener, opener_index, match)
