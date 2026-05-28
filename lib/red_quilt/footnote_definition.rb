@@ -74,7 +74,7 @@ module RedQuilt
                                  str1: label)
         @arena.append_child(section_id(root_id), def_id)
         registry.define(label, def_id)
-        @block_parser.__send__(:parse_lines, def_id, content_lines, transformed: true)
+        @block_parser.parse_lines(def_id, content_lines, transformed: true)
         consumed_index
       end
 
@@ -112,11 +112,11 @@ module RedQuilt
             next
           end
 
-          if leading_columns(current.content) >= CONTENT_INDENT
+          if Indentation.leading_columns(current.content) >= CONTENT_INDENT
             pending_blanks.each { |b| content_lines << Line.new("", b.start_byte, b.end_byte, true) }
             pending_blanks = []
-            stripped = strip_columns(current.content, CONTENT_INDENT)
-            advance = [leading_ws_bytes(current.content), current.content.bytesize - stripped.bytesize].min
+            stripped = Indentation.strip_columns(current.content, CONTENT_INDENT)
+            advance = [Indentation.leading_ws_bytes(current.content), current.content.bytesize - stripped.bytesize].min
             advance = 0 if advance.negative?
             content_lines << Line.new(stripped, current.start_byte + advance, current.end_byte, false)
             index += 1
@@ -125,7 +125,7 @@ module RedQuilt
 
           break unless pending_blanks.empty?
           break if content_lines.last.nil? || content_lines.last.blank
-          break if lazy_break?(lines, index) || FootnoteDefinition.match(current.content)
+          break if @block_parser.lazy_break?(lines, index) || FootnoteDefinition.match(current.content)
 
           stripped = current.content.sub(/\A[ \t]+/, "")
           strip_len = current.content.length - stripped.length
@@ -141,22 +141,6 @@ module RedQuilt
           @arena.append_child(root_id, id)
           id
         end
-      end
-
-      def leading_columns(text)
-        @block_parser.__send__(:leading_columns, text)
-      end
-
-      def strip_columns(text, n)
-        @block_parser.__send__(:strip_columns, text, n)
-      end
-
-      def leading_ws_bytes(text)
-        @block_parser.__send__(:leading_ws_bytes, text)
-      end
-
-      def lazy_break?(lines, index)
-        @block_parser.__send__(:lazy_break?, lines, index)
       end
     end
   end

@@ -161,7 +161,7 @@ module RedQuilt
         while index < lines.length
           # Thematic break beats list-item continuation per CommonMark:
           # a line like `* * *` ends the list and starts an <hr />.
-          break if @block_parser.__send__(:thematic_break?, lines[index].content)
+          break if @block_parser.thematic_break?(lines[index].content)
 
           match = List.match(lines[index].content)
           break unless match
@@ -184,7 +184,7 @@ module RedQuilt
           # `loose` is already true from a previous iteration, `||=`
           # would skip the call and the item would never receive its
           # children.
-          item_blank_between_blocks = @block_parser.__send__(:parse_lines, item_id, item_lines, transformed: true)
+          item_blank_between_blocks = @block_parser.parse_lines(item_id, item_lines, transformed: true)
           loose = true if item_blank_between_blocks
 
           blank_count = 0
@@ -249,17 +249,17 @@ module RedQuilt
           # CommonMark: continuation requires the line's leading
           # whitespace to span at least `n` columns, with tabs expanding
           # to multiples of 4.
-          if @block_parser.__send__(:leading_columns, current.content) >= n
+          if Indentation.leading_columns(current.content) >= n
             item_lines.concat(pending_blanks)
             pending_blanks = []
-            stripped_content = @block_parser.__send__(:strip_columns, current.content, n)
+            stripped_content = Indentation.strip_columns(current.content, n)
             # When strip_columns synthesises spaces for a partially-
             # consumed tab, the result can be longer than the original
             # bytes — pretending we "consumed bytes" then yields a bogus
             # negative offset. Keep start_byte at the original line
             # start so downstream source-range arithmetic stays
             # monotonic.
-            ws_bytes = @block_parser.__send__(:leading_ws_bytes, current.content)
+            ws_bytes = Indentation.leading_ws_bytes(current.content)
             start_advance = [ws_bytes, current.content.bytesize - stripped_content.bytesize].min
             start_advance = 0 if start_advance.negative?
             item_lines << Line.new(
@@ -283,7 +283,7 @@ module RedQuilt
           #   - the new line is not itself a block-level interrupter
           if pending_blanks.empty? &&
              item_lines.last && !item_lines.last.blank &&
-             !@block_parser.__send__(:lazy_break?, lines, index)
+             !@block_parser.lazy_break?(lines, index)
             # Lazy continuation lines are joined into the open paragraph;
             # their leading indentation is dropped (CommonMark spec).
             # The `lazy` flag tells parse_paragraph to absorb the line

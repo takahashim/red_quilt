@@ -207,7 +207,7 @@ module RedQuilt
         # CommonMark: strip up to 4 columns of leading whitespace
         # (tab-aware) from every line, including blank lines whose
         # content beyond column 4 must be preserved verbatim.
-        code_lines << strip_columns(line.content, 4)
+        code_lines << Indentation.strip_columns(line.content, 4)
         index += 1
       end
 
@@ -450,19 +450,6 @@ module RedQuilt
       false
     end
 
-    # Bytes of literal leading 0x20 / 0x09 in `text`.
-    def leading_ws_bytes(text)
-      i = 0
-      bytes = text.bytesize
-      while i < bytes
-        b = text.getbyte(i)
-        break unless b == 0x20 || b == 0x09
-
-        i += 1
-      end
-      i
-    end
-
     # Strips up to `max` leading 0x20 bytes from `text`. Returns the
     # original string when nothing changed, so callers avoid an
     # allocation in the common no-indent case.
@@ -588,59 +575,11 @@ module RedQuilt
     def indented_code_line?(text)
       # CommonMark: 4+ columns of leading whitespace, where tabs expand
       # virtually to a tab stop of 4 columns.
-      leading_columns(text) >= 4
+      Indentation.leading_columns(text) >= 4
     end
 
     # Returns the column count of leading whitespace, treating tabs as
     # advancing to the next multiple-of-4 column.
-    def leading_columns(text)
-      col = 0
-      i = 0
-      bytes = text.bytesize
-      while i < bytes
-        b = text.getbyte(i)
-        if b == 0x20
-          col += 1
-        elsif b == 0x09
-          col = ((col / 4) + 1) * 4
-        else
-          break
-        end
-        i += 1
-      end
-      col
-    end
-
-    # Strips up to `n` columns of leading whitespace from `text` and
-    # returns the rest. Leading whitespace is normalised to spaces in
-    # the returned string so subsequent strips compose correctly
-    # regardless of where they land relative to the original tab stops.
-    def strip_columns(text, n)
-      return text if n <= 0
-
-      col = 0
-      i = 0
-      bytes = text.bytesize
-      while i < bytes
-        b = text.getbyte(i)
-        if b == 0x20
-          col += 1
-        elsif b == 0x09
-          col = ((col / 4) + 1) * 4
-        else
-          break
-        end
-        i += 1
-      end
-      # text[0...i] is all leading whitespace representing `col` cols.
-      if n >= col
-        i.zero? ? text : text.byteslice(i..)
-      else
-        # Keep the unstripped portion as a run of spaces.
-        (" " * (col - n)) + text.byteslice(i..)
-      end
-    end
-
     def html_block_start?(text)
       # Indented code block takes precedence (4+ spaces)
       return false if text.start_with?("    ")
@@ -766,5 +705,11 @@ module RedQuilt
     def span_len(line)
       line.end_byte - line.start_byte
     end
+
+    # Methods the collaborator parsers (List::Parser, Blockquote::Parser,
+    # FootnoteDefinition::Parser) call back into. Public so they can be
+    # invoked directly rather than via __send__; not part of the gem's
+    # public API.
+    public :parse_lines, :lazy_break?, :thematic_break?, :paragraph_eligible_line?
   end
 end

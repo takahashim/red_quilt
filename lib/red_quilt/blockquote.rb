@@ -97,7 +97,7 @@ module RedQuilt
                 paragraph_eligible_through_blockquotes?(stripped.content)
               end
             block_lines << stripped
-          elsif paragraph_open && !@block_parser.__send__(:lazy_break?, lines, index)
+          elsif paragraph_open && !@block_parser.lazy_break?(lines, index)
             # Lazy continuation: a `>`-less line is absorbed into the
             # currently open paragraph as long as it doesn't itself
             # start a new block. Only allowed while the most recent
@@ -116,7 +116,7 @@ module RedQuilt
                                    source_start: block_lines.first.start_byte,
                                    source_len: block_lines.last.end_byte - block_lines.first.start_byte)
         @arena.append_child(parent_id, block_id)
-        @block_parser.__send__(:parse_lines, block_id, block_lines, transformed: true)
+        @block_parser.parse_lines(block_id, block_lines, transformed: true)
         index
       end
 
@@ -144,7 +144,7 @@ module RedQuilt
             break
           end
         end
-        @block_parser.__send__(:paragraph_eligible_line?, c)
+        @block_parser.paragraph_eligible_line?(c)
       end
     end
   end
