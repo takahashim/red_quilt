@@ -33,11 +33,9 @@ module RedQuilt
         abs_col += 1
       end
       unless i < bytes && content.getbyte(i) == 0x3E
-        return Line.new(content: content,
-                        start_byte: line.start_byte,
-                        end_byte: line.end_byte,
-                        blank: !content.match?(/\S/))
+        return Line.new(content, line.start_byte, line.end_byte, !content.match?(/\S/))
       end
+
       i += 1
       abs_col += 1 # consume `>`
 
@@ -67,12 +65,7 @@ module RedQuilt
         offset = i
       end
 
-      Line.new(
-        content: tail,
-        start_byte: line.start_byte + offset,
-        end_byte: line.end_byte,
-        blank: !tail.match?(/\S/),
-      )
+      Line.new(tail, line.start_byte + offset, line.end_byte, !tail.match?(/\S/))
     end
 
     class Parser
@@ -111,11 +104,7 @@ module RedQuilt
             # in-quote line is paragraph-eligible content. The `lazy`
             # flag prevents the paragraph parser from interpreting
             # `===` / `---` on such a line as a setext underline.
-            block_lines << Line.new(content: line.content,
-                                    start_byte: line.start_byte,
-                                    end_byte: line.end_byte,
-                                    blank: line.blank,
-                                    lazy_continuation: true)
+            block_lines << Line.new(line.content, line.start_byte, line.end_byte, line.blank, true)
           else
             break
           end

@@ -220,10 +220,10 @@ module RedQuilt
         n = match[:content_indent]
         first_line = lines[index]
         item_lines << Line.new(
-          content: match[:content],
-          start_byte: first_line.start_byte + match[:content_start],
-          end_byte: first_line.end_byte,
-          blank: match[:content].strip.empty?,
+          match[:content],
+          first_line.start_byte + match[:content_start],
+          first_line.end_byte,
+          match[:content].strip.empty?,
         )
         index += 1
 
@@ -241,12 +241,7 @@ module RedQuilt
           current = lines[index]
 
           if current.blank
-            pending_blanks << Line.new(
-              content: "",
-              start_byte: current.start_byte,
-              end_byte: current.end_byte,
-              blank: true,
-            )
+            pending_blanks << Line.new("", current.start_byte, current.end_byte, true)
             index += 1
             next
           end
@@ -268,10 +263,10 @@ module RedQuilt
             start_advance = [ws_bytes, current.content.bytesize - stripped_content.bytesize].min
             start_advance = 0 if start_advance.negative?
             item_lines << Line.new(
-              content: stripped_content,
-              start_byte: current.start_byte + start_advance,
-              end_byte: current.end_byte,
-              blank: false,
+              stripped_content,
+              current.start_byte + start_advance,
+              current.end_byte,
+              false,
             )
             index += 1
             next
@@ -297,11 +292,11 @@ module RedQuilt
             stripped = current.content.sub(/\A[ \t]+/, "")
             strip_len = current.content.length - stripped.length
             item_lines << Line.new(
-              content: stripped,
-              start_byte: current.start_byte + strip_len,
-              end_byte: current.end_byte,
-              blank: false,
-              lazy_continuation: true,
+              stripped,
+              current.start_byte + strip_len,
+              current.end_byte,
+              false,
+              true,
             )
             index += 1
             next

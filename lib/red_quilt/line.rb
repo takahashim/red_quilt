@@ -6,5 +6,9 @@ module RedQuilt
   # container prefix already stripped; `start_byte`/`end_byte` locate it
   # in the original source. `blank` marks whitespace-only lines and
   # `lazy_continuation` flags lines folded into an open paragraph.
-  Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy_continuation, keyword_init: true)
+  #
+  # Positional (not keyword_init): one Line is built per source line, so
+  # the ~2.5x faster positional constructor matters on large documents.
+  # Argument order: content, start_byte, end_byte, blank, lazy_continuation.
+  Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy_continuation)
 end

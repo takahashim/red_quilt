@@ -504,12 +504,7 @@ module RedQuilt
       offset = 0
       parts.each do |raw|
         size = raw.bytesize
-        lines << Line.new(
-          content: raw,
-          start_byte: offset,
-          end_byte: offset + size,
-          blank: !raw.match?(/[^ \t]/),
-        )
+        lines << Line.new(raw, offset, offset + size, !raw.match?(/[^ \t]/))
         offset += size + 1
       end
       lines
