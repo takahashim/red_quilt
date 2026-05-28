@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # CommonMark spec 2.3 (Insecure characters) and 2.4 (Line endings)
 # normalization, plus blank-line definition from 4 (Leaf blocks).
 

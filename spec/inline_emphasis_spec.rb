@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # Coverage for the CommonMark spec section 6.2 (emphasis and strong
 # emphasis) behaviors that the Lexer + Builder pipeline gained over
 # the legacy heuristic parser. Test inputs follow CommonMark 0.31.2

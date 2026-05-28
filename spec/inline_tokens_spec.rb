@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe RedQuilt::Inline::Tokens do
   let(:tokens) { described_class.new }
 

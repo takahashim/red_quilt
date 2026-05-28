@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # CommonMark spec 6.4 (Entity and numeric character references).
 #
 # Numeric references have a fixed digit width:

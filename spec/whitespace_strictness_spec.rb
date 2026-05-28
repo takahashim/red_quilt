@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # CommonMark spec restricts certain "whitespace" contexts more narrowly
 # than Ruby's \s class:
 #   - URI autolinks (6.5): no ASCII control char, no space, no <, no >.

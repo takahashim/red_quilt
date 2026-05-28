@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe "standalone themes" do
   def doc
     RedQuilt.parse("# Title\n\nbody")

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # GFM strikethrough: ~~foo~~ -> <del>foo</del>
 # Based on the GFM spec extension. Strikethrough uses run length 2 (~~);
 # a single `~` is left as text. Triple-tilde at the start of a paragraph

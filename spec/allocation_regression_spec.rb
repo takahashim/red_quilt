@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # Guards against allocation regressions. Unlike wall-clock benchmarks,
 # the object count a fixed input allocates is deterministic (no run-to-run
 # noise), so it makes a reliable CI gate.

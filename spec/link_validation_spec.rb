@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # CommonMark spec compliance for two link-related constraints:
 #   - Link label length cap: "A link label can have at most 999 characters
 #     inside the square brackets." (spec 6.3)

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe RedQuilt::Inline::Builder do
   let(:source) { "" }
   let(:arena) { RedQuilt::Arena.new(source) }

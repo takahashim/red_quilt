@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe "GFM extended autolinks" do
   def render(src)
     RedQuilt.render_html(src, extended_autolinks: true)

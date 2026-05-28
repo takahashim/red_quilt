@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe RedQuilt::Inline::Flanking do
   describe ".whitespace?" do
     it "treats nil (line edge) as whitespace" do

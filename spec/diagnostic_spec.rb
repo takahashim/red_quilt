@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe RedQuilt::Diagnostic do
   describe "construction" do
     it "stores severity / rule / message" do

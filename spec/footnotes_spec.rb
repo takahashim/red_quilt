@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # GitHub-style footnotes (opt-in via `footnotes: true`). References render
 # as superscript links; only referenced definitions render, numbered in
 # first-reference order, in a trailing <section class="footnotes">.

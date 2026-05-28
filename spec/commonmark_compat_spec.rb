@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 # Examples are sourced from the CommonMark 0.31.2 specification:
 # https://spec.commonmark.org/0.31.2/
 

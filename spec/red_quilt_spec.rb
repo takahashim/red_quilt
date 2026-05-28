@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe RedQuilt do
   describe ".parse" do
     it "returns a document with traversable root children" do

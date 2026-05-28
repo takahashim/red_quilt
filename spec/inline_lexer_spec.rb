@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe RedQuilt::Inline::Lexer do
   let(:source) { "hello" }
   let(:lexer) { described_class.new(source) }
