@@ -31,6 +31,8 @@ module RedQuilt
         image: "image",
         html_inline: "html",
         strikethrough: "delete",
+        footnote_reference: "footnoteReference",
+        footnote_definition: "footnoteDefinition",
       }.freeze
 
       def initialize(document)
@@ -88,6 +90,15 @@ module RedQuilt
           title = @arena.str2(node_id)
           result["title"] = title && !title.empty? ? title : nil
           result["alt"] = NodeRef.new(@document, node_id).text.to_s
+        when NodeType::FOOTNOTE_REFERENCE
+          label = @arena.str1(node_id).to_s
+          result["identifier"] = label
+          result["label"] = label
+        when NodeType::FOOTNOTE_DEFINITION
+          label = @arena.str1(node_id).to_s
+          result["identifier"] = label
+          result["label"] = label
+          result["children"] = children(node_id)
         when NodeType::HTML_BLOCK, NodeType::HTML_INLINE
           result["value"] = NodeRef.new(@document, node_id).text.to_s
         when NodeType::TABLE
@@ -103,7 +114,17 @@ module RedQuilt
       end
 
       def children(node_id, parent_spread: false)
-        @arena.child_ids(node_id).map { |child_id| node(child_id, parent_spread: parent_spread) }
+        result = []
+        @arena.child_ids(node_id).each do |child_id|
+          # mdast has no footnotes-section wrapper: footnote definitions are
+          # plain root-level nodes, so splice the section's children in.
+          if @arena.type(child_id) == NodeType::FOOTNOTES_SECTION
+            @arena.child_ids(child_id).each { |def_id| result << node(def_id, parent_spread: parent_spread) }
+          else
+            result << node(child_id, parent_spread: parent_spread)
+          end
+        end
+        result
       end
 
       def position(span)

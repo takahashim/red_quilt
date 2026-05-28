@@ -102,6 +102,10 @@ module RedQuilt
         { text: @arena.text(@node_id), info: @arena.str2(@node_id) }
       when NodeType::LINK, NodeType::IMAGE
         { destination: @arena.str1(@node_id), title: @arena.str2(@node_id), text: text }
+      when NodeType::FOOTNOTE_REFERENCE
+        { label: @arena.str1(@node_id), number: @arena.int1(@node_id) }
+      when NodeType::FOOTNOTE_DEFINITION
+        { label: @arena.str1(@node_id) }
       else
         {}
       end

@@ -13,6 +13,8 @@ require_relative "red_quilt/document"
 require_relative "red_quilt/inline"
 require_relative "red_quilt/inline/html_entities"
 require_relative "red_quilt/reference_definition"
+require_relative "red_quilt/footnote_registry"
+require_relative "red_quilt/footnote_definition"
 require_relative "red_quilt/list"
 require_relative "red_quilt/blockquote"
 require_relative "red_quilt/block_parser"
@@ -23,6 +25,7 @@ require_relative "red_quilt/inline/lexer"
 require_relative "red_quilt/inline/link_scanner"
 require_relative "red_quilt/inline/builder"
 require_relative "red_quilt/inline_pass"
+require_relative "red_quilt/footnote_pass"
 require_relative "red_quilt/extended_autolink_pass"
 require_relative "red_quilt/lint_pass"
 require_relative "red_quilt/renderer/html"
@@ -32,27 +35,31 @@ module RedQuilt
   class Error < StandardError; end
 
   class << self
-    def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, lint: false)
+    def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false)
       normalized = normalize_input(source)
       arena = Arena.new(normalized)
-      block_parser = BlockParser.new(arena)
+      footnote_registry = FootnoteRegistry.new if footnotes
+      block_parser = BlockParser.new(arena, footnotes: footnote_registry)
       root_id = block_parser.parse
       document = Document.new(normalized, arena, root_id,
                               allow_html: allow_html,
                               disallow_raw_html: disallow_raw_html,
-                              references: block_parser.references)
+                              references: block_parser.references,
+                              footnotes: footnote_registry)
       document.diagnostics.concat(block_parser.diagnostics)
       InlinePass.new(document).apply
+      FootnotePass.new(document).apply if footnote_registry
       ExtendedAutolinkPass.new(document).apply if extended_autolinks
       LintPass.new(document).apply if lint
       document
     end
 
-    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, lint: false)
+    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false)
       parse(source,
             allow_html: allow_html,
             disallow_raw_html: disallow_raw_html,
             extended_autolinks: extended_autolinks,
+            footnotes: footnotes,
             lint: lint).to_html
     end
 

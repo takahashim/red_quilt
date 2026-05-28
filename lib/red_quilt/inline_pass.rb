@@ -10,7 +10,8 @@ module RedQuilt
       @lexer = Inline::Lexer.new(@document.source)
       @tokens = Inline::Tokens.new
       @builder = Inline::Builder.new(@arena, @document.source, @document.references,
-                                     diagnostics: @document.diagnostics)
+                                     diagnostics: @document.diagnostics,
+                                     footnotes: @document.footnotes)
     end
 
     def apply
@@ -31,7 +32,8 @@ module RedQuilt
           Inline::Lexer.new(literal).lex_into(@tokens, 0, literal.bytesize)
           Inline::Builder.new(@arena, literal, @document.references,
                               track_source: false,
-                              diagnostics: @document.diagnostics).build(node_id, @tokens)
+                              diagnostics: @document.diagnostics,
+                              footnotes: @document.footnotes).build(node_id, @tokens)
         else
           start_byte = @arena.source_start(node_id)
           end_byte = @arena.source_end(node_id)

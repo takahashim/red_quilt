@@ -2,15 +2,16 @@
 
 module RedQuilt
   class Document
-    attr_reader :source, :arena, :root_id, :references
+    attr_reader :source, :arena, :root_id, :references, :footnotes
 
-    def initialize(source, arena, root_id, allow_html: false, disallow_raw_html: false, references: {})
+    def initialize(source, arena, root_id, allow_html: false, disallow_raw_html: false, references: {}, footnotes: nil)
       @source = source
       @arena = arena
       @root_id = root_id
       @allow_html = allow_html
       @disallow_raw_html = disallow_raw_html
       @references = references
+      @footnotes = footnotes
     end
 
     def allow_html?

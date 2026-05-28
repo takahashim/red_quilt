@@ -36,7 +36,7 @@ module RedQuilt
       # diagnostics: an optional Array the builder appends warnings to
       # (unsafe URL schemes, missing references, ...). The caller — usually
       # InlinePass — is expected to forward Document#diagnostics here.
-      def initialize(arena, source, references, track_source: true, diagnostics: nil)
+      def initialize(arena, source, references, track_source: true, diagnostics: nil, footnotes: nil)
         @arena = arena
         @source = source
         # Binary view of the source for String#byteindex hot paths:
@@ -47,6 +47,7 @@ module RedQuilt
         @references = references
         @track_source = track_source
         @diagnostics = diagnostics
+        @footnotes = footnotes
         @link_scanner = LinkScanner.new(source)
       end
 
@@ -64,15 +65,15 @@ module RedQuilt
 
       # --------------------------- node helpers ---------------------------
 
-      def add_arena_node(type, start_byte, end_byte, str1: nil, str2: nil)
+      def add_arena_node(type, start_byte, end_byte, str1: nil, str2: nil, int1: 0, int2: 0)
         if @track_source
           @arena.add_node(type,
                           source_start: start_byte,
                           source_len: end_byte - start_byte,
-                          str1: str1, str2: str2)
+                          str1: str1, str2: str2, int1: int1, int2: int2)
         else
           @arena.add_node(type, source_start: -1, source_len: 0,
-                                str1: str1, str2: str2)
+                                str1: str1, str2: str2, int1: int1, int2: int2)
         end
       end
 
@@ -335,6 +336,12 @@ module RedQuilt
         opener = @bracket_stack[opener_index]
         rbracket_end = @tokens.end_byte(rbracket_token_id)
 
+        # Footnote references (`[^label]`) take precedence over link forms.
+        if @footnotes && !opener.image && (footnote = try_footnote_reference(opener, rbracket_token_id))
+          finalize_footnote(opener, opener_index, footnote, rbracket_end)
+          return next_token_after(rbracket_end, search_from_id)
+        end
+
         match = @link_scanner.inline_link(rbracket_end) ||
                 try_reference_link(opener, rbracket_token_id, rbracket_end)
         unless match
@@ -416,6 +423,48 @@ module RedQuilt
         unless opener.image
           @bracket_stack.each { |b| b.active = false unless b.image }
         end
+      end
+
+      # A footnote reference is a non-image bracket whose inner text is
+      # `^label` (label non-empty, no whitespace or `]`). Returns
+      # { label:, number:, occurrence: } when the label has a registered
+      # definition, else nil (so the bracket falls back to link logic).
+      FOOTNOTE_REF_RE = /\A\^([^\]\s]+)\z/
+
+      def try_footnote_reference(opener, rbracket_token_id)
+        inner_start = @tokens.end_byte(opener.token_id)
+        inner_end = @tokens.start_byte(rbracket_token_id)
+        match = FOOTNOTE_REF_RE.match(@source.byteslice(inner_start, inner_end - inner_start).to_s)
+        return nil unless match
+
+        label = ReferenceDefinition.normalize_label(match[1])
+        number, occurrence = @footnotes.reference(label)
+        return nil unless number
+
+        { label: label, number: number, occurrence: occurrence }
+      end
+
+      def finalize_footnote(opener, opener_index, footnote, rbracket_end)
+        opener_start = @tokens.start_byte(opener.token_id)
+        fn_id = add_arena_node(
+          NodeType::FOOTNOTE_REFERENCE, opener_start, rbracket_end,
+          str1: footnote[:label], int1: footnote[:number], int2: footnote[:occurrence],
+        )
+        @arena.insert_before(@parent_id, opener.node_id, fn_id)
+
+        # Drop the provisional `[` node and the inner `^label` text node(s);
+        # the footnote reference replaces them entirely.
+        cursor = opener.node_id
+        while cursor != -1
+          nxt = @arena.raw_next_sibling_id(cursor)
+          @provisional_nodes.delete(cursor)
+          @arena.detach(cursor)
+          cursor = nxt
+        end
+
+        # Discard any delimiters opened inside the (literal) label.
+        @delimiter_stack.slice!(opener.delim_stack_size..)
+        @bracket_stack.delete_at(opener_index)
       end
 
       def next_token_after(byte_offset, from_id)

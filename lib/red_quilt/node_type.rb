@@ -14,6 +14,8 @@ module RedQuilt
     TABLE = 18
     TABLE_ROW = 19
     TABLE_CELL = 20
+    FOOTNOTE_DEFINITION = 21
+    FOOTNOTES_SECTION = 22
 
     TEXT = 100
     SOFTBREAK = 101
@@ -25,6 +27,7 @@ module RedQuilt
     IMAGE = 107
     HTML_INLINE = 109
     STRIKETHROUGH = 111
+    FOOTNOTE_REFERENCE = 112
 
     TYPE_NAMES = {
       DOCUMENT => :document,
@@ -39,6 +42,8 @@ module RedQuilt
       TABLE => :table,
       TABLE_ROW => :table_row,
       TABLE_CELL => :table_cell,
+      FOOTNOTE_DEFINITION => :footnote_definition,
+      FOOTNOTES_SECTION => :footnotes_section,
       TEXT => :text,
       SOFTBREAK => :softbreak,
       HARDBREAK => :hardbreak,
@@ -49,6 +54,7 @@ module RedQuilt
       IMAGE => :image,
       HTML_INLINE => :html_inline,
       STRIKETHROUGH => :strikethrough,
+      FOOTNOTE_REFERENCE => :footnote_reference,
     }.freeze
 
     module_function

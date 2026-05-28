@@ -2,24 +2,27 @@
 
 module RedQuilt
   class BlockParser
-    def initialize(arena)
+    def initialize(arena, footnotes: nil)
       @arena = arena
       @lines = build_lines(arena.source)
       @references = {}
+      @footnotes = footnotes
       @diagnostics = []
       # Cached collaborator parsers — created once and reused for every
       # block of the corresponding type (including nested ones) so the
       # dispatch path stays allocation-free.
       @list_parser = List::Parser.new(self)
       @blockquote_parser = Blockquote::Parser.new(self)
+      @footnote_parser = FootnoteDefinition::Parser.new(self)
     end
 
     attr_reader :references, :arena, :diagnostics
 
     def parse
-      root_id = @arena.add_node(NodeType::DOCUMENT, source_start: 0, source_len: @arena.source.bytesize)
-      parse_lines(root_id, @lines, transformed: false)
-      root_id
+      @root_id = @arena.add_node(NodeType::DOCUMENT, source_start: 0, source_len: @arena.source.bytesize)
+      parse_lines(@root_id, @lines, transformed: false)
+      @footnote_parser.move_section_to_end(@root_id) if @footnotes
+      @root_id
     end
 
     private
@@ -82,6 +85,8 @@ module RedQuilt
         elsif thematic_break?(content)
           @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: span_len(line)))
           index += 1
+        elsif @footnotes && (footnote = FootnoteDefinition.match(content))
+          index = @footnote_parser.parse(lines, index, footnote, @footnotes, @root_id)
         elsif (reference = ReferenceDefinition.consume(lines, index))
           store_reference(reference[:reference], reference[:source_span])
           index += reference[:consumed]

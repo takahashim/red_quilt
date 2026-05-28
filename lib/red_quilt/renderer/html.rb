@@ -114,7 +114,65 @@ module RedQuilt
           @out << " />"
         when NodeType::HTML_INLINE
           render_raw_html(@arena.text(node_id).to_s, block: false)
+        when NodeType::FOOTNOTE_REFERENCE
+          render_footnote_reference(node_id)
+        when NodeType::FOOTNOTES_SECTION
+          render_footnotes_section(node_id)
         end
+      end
+
+      # `[^label]` reference: a superscript link to the definition. The
+      # element ids use the footnote number; a second+ reference to the
+      # same footnote gets a `-M` suffix so each backref has a unique target.
+      def render_footnote_reference(node_id)
+        number = @arena.int1(node_id)
+        occurrence = @arena.int2(node_id)
+        ref_id = occurrence > 1 ? "fnref-#{number}-#{occurrence}" : "fnref-#{number}"
+        @out << %(<sup><a href="#fn-#{number}" id="#{ref_id}">#{number}</a></sup>)
+      end
+
+      def render_footnotes_section(node_id)
+        @out << %(<section class="footnotes">\n<ol>\n)
+        @arena.each_child(node_id) { |def_id| render_footnote_definition(def_id) }
+        @out << "</ol>\n</section>\n"
+      end
+
+      def render_footnote_definition(def_id)
+        label = @arena.str1(def_id).to_s
+        number = @document.footnotes.number(label)
+        occurrences = @document.footnotes.occurrences(label)
+        @out << %(<li id="fn-#{number}">\n)
+
+        # Append the backref(s) inside the definition's last paragraph (GFM);
+        # if the last block isn't a paragraph, emit a standalone one.
+        last = @arena.raw_last_child_id(def_id)
+        child = @arena.raw_first_child_id(def_id)
+        until child == -1
+          if child == last && @arena.type(child) == NodeType::PARAGRAPH
+            @out << "<p>"
+            render_children(child)
+            @out << footnote_backrefs(number, occurrences)
+            @out << "</p>\n"
+          else
+            render_node(child)
+          end
+          child = @arena.raw_next_sibling_id(child)
+        end
+        if last == -1 || @arena.type(last) != NodeType::PARAGRAPH
+          @out << "<p>#{footnote_backrefs(number, occurrences)}</p>\n"
+        end
+
+        @out << "</li>\n"
+      end
+
+      def footnote_backrefs(number, occurrences)
+        out = +""
+        (1..occurrences).each do |occ|
+          ref_id = occ > 1 ? "fnref-#{number}-#{occ}" : "fnref-#{number}"
+          suffix = occ > 1 ? "<sup>#{occ}</sup>" : ""
+          out << %( <a href="##{ref_id}">&#8617;#{suffix}</a>)
+        end
+        out
       end
 
       def render_table(table_id)
