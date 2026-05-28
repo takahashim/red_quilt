@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["takahashim"]
   spec.email = ["takahashimm@gmail.com"]
 
-  spec.summary = "Arena AST based Markdown processor for Ruby"
-  spec.description = "RedQuilt parses Markdown into a low-allocation arena AST and renders safe HTML."
+  spec.summary = "CommonMark-based Markdown processor written in pure Ruby"
+  spec.description = "A modern Markdown document processor in pure Ruby, with an arena-style AST and full CommonMark spec test suite compliance."
   spec.homepage = "https://github.com/takahashim/red_quilt"
   spec.required_ruby_version = ">= 3.3.0"
 

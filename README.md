@@ -1,7 +1,7 @@
 # RedQuilt
 
 A modern Markdown document processor in pure Ruby, with an arena-style AST.
-Passes the full CommonMark spec test suite, and as fast as kramdown, sometimes faster.
+Passes the full CommonMark spec test suite, and generally faster than kramdown.
 
 ## Installation
 
@@ -259,19 +259,19 @@ ruby spec/bench_block.rb
 
 Profiles parse performance on various Markdown patterns.
 
-## Performance (v0.6.0, Ruby 4.0.5)
+## Performance (v0.6.1, Ruby 4.0.5)
 
 Comparison against [kramdown](https://kramdown.gettalong.org/) on arm64-darwin (Apple Silicon), measured with `spec/bench_vs_kramdown.rb` (benchmark-ips):
 
 | Fixture | Size | RedQuilt (i/s) | kramdown (i/s) | RedQuilt vs kramdown |
 |---------|-----:|---------------:|---------------:|---------------------:|
-| short_paragraph | 49 B | 26,543 | 5,846 | 4.54x faster |
-| long_paragraph | 1.4 KB | 1,184 | 932 | 1.27x faster |
-| nested_emphasis | 1.4 KB | 907 | 783 | within error |
-| many_links | 2.0 KB | 1,012 | 734 | 1.38x faster |
-| mixed_markup | 1.8 KB | 950 | 768 | 1.24x faster |
-| deep_nesting | 800 B | 758 | 332 | 2.29x faster |
-| cmark_spec | 205 KB | 33.0 | 28.4 | within error |
+| short_paragraph | 49 B | 26,531 | 5,416 | 4.90x faster |
+| long_paragraph | 1.4 KB | 981 | 926 | within error |
+| nested_emphasis | 1.4 KB | 999 | 689 | 1.45x faster |
+| many_links | 2.0 KB | 1,131 | 794 | 1.43x faster |
+| mixed_markup | 1.8 KB | 1,028 | 729 | 1.41x faster |
+| deep_nesting | 800 B | 827 | 349 | 2.37x faster |
+| cmark_spec | 205 KB | 39.1 | 30.2 | 1.30x faster |
 
 Reproduce locally:
 
