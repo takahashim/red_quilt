@@ -72,6 +72,20 @@ doc.diagnostics.map(&:rule)   # => [:unsafe_url]
 doc.diagnostics.first.severity # => :warning
 ```
 
+### Tilt integration
+
+RedQuilt ships a [Tilt](https://github.com/jeremyevans/tilt) adapter.
+NOTE: It is not loaded by default; require it explicitly and add `tilt` to your own bundle:
+
+```ruby
+require "red_quilt/tilt"
+
+Tilt.new("page.md").render          # => HTML
+Tilt.new("page.md", footnotes: true).render
+```
+
+Native options (`allow_html:`, `footnotes:`, …) pass straight through; Tilt's `escape_html:` convention is also honored.
+
 ## Documentation
 
 - [API reference](docs/api.md) — `Document` / `NodeRef` / `SourceSpan`, supported syntax, and usage examples

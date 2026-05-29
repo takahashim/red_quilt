@@ -16,4 +16,5 @@ group :development do
   gem "kramdown", "~> 2.4"
   gem "rubocop"
   gem "stackprof", "~> 0.2"
+  gem "tilt", "~> 2.0"
 end
