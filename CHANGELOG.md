@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-29
+
+### Added
+
+- Optional Tilt template adapter, registered for the common markdown
+  extensions (`.md`, `.markdown`, …).
+- Opt-in heading anchor ids via the `heading_ids:` option on `render_html` /
+  `Document#to_html`. Slugs follow GitHub's scheme but preserve Unicode, so
+  non-ASCII (e.g. Japanese) headings stay readable; duplicates within a
+  document get `-1`, `-2`, … suffixes.
+
+### Fixed
+
+- `require "red_quilt/cli"` on its own now works (cli.rb requires red_quilt).
+
+### Internal
+
+- Add LICENSE and gemspec metadata; move the API reference to `docs/api.md`.
+
 ## [0.6.1] - 2026-05-29
 
 ### Added
