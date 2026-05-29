@@ -13,7 +13,7 @@ module RedQuilt
   class TiltTemplate < Tilt::Template
     self.default_mime_type = "text/html"
 
-    NATIVE_OPTIONS = %i[allow_html disallow_raw_html extended_autolinks footnotes lint].freeze
+    NATIVE_OPTIONS = %i[allow_html disallow_raw_html extended_autolinks footnotes lint heading_ids].freeze
 
     def prepare; end
 

@@ -16,7 +16,8 @@ module RedQuilt
                          ?disallow_raw_html: bool,
                          ?extended_autolinks: bool,
                          ?footnotes: bool,
-                         ?lint: bool) -> String
+                         ?lint: bool,
+                         ?heading_ids: bool) -> String
 
   class Document
     attr_reader source: String
@@ -37,7 +38,7 @@ module RedQuilt
     def walk: () { (NodeRef) -> void } -> void
             | () -> Enumerator[NodeRef, void]
     def to_html: (?standalone: bool, ?title: String?, ?lang: String,
-                  ?css: String?, ?theme: Symbol?) -> String
+                  ?css: String?, ?theme: Symbol?, ?heading_ids: bool) -> String
     def to_ast: () -> Hash[Symbol, untyped]
     def to_json: (*untyped) -> String
     def to_mdast: () -> Hash[String, untyped]
@@ -181,6 +182,20 @@ module RedQuilt
     TYPE_NAMES: Hash[Integer, Symbol]
 
     def self.name_for: (Integer type) -> Symbol
+  end
+
+  # Unicode-preserving heading-anchor slugs (github-slugger style).
+  module Slug
+    STRIP_RE: Regexp
+    SPACE_RE: Regexp
+
+    def self.slugify: (String text) -> String
+
+    # Per-document collision counter; later duplicates get `-N` suffixes.
+    class Counter
+      def initialize: () -> void
+      def generate: (String text) -> String
+    end
   end
 
   # Bundled stylesheets for standalone HTML output (`:none` => no CSS).

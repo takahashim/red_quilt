@@ -72,6 +72,17 @@ doc.diagnostics.map(&:rule)   # => [:unsafe_url]
 doc.diagnostics.first.severity # => :warning
 ```
 
+### Heading anchors (opt-in)
+
+`render_html` / `to_html` accept `heading_ids:` to give every heading a
+slugified `id` for anchor links. Slugs follow GitHub's scheme but keep Unicode
+intact, so Japanese headings stay readable; duplicates get `-1`, `-2` suffixes.
+
+```ruby
+RedQuilt.render_html("# Hello World\n\n## はじめに", heading_ids: true)
+# => "<h1 id=\"hello-world\">Hello World</h1>\n<h2 id=\"はじめに\">はじめに</h2>\n"
+```
+
 ### Tilt integration
 
 RedQuilt ships a [Tilt](https://github.com/jeremyevans/tilt) adapter.

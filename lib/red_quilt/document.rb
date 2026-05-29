@@ -45,8 +45,10 @@ module RedQuilt
     # theme: a bundled stylesheet to inline (`:none` embeds nothing, keeping
     #   the bare template; `:default` embeds RedQuilt's default theme). `css`
     #   (an external stylesheet link) is independent and may be combined.
-    def to_html(standalone: false, title: nil, lang: "en", css: nil, theme: :none)
-      body = Renderer::HTML.new(self).render
+    # heading_ids: when true, every heading gets a slugified `id` (Unicode
+    #   preserving, deduplicated within the document) for anchor links.
+    def to_html(standalone: false, title: nil, lang: "en", css: nil, theme: :none, heading_ids: false)
+      body = Renderer::HTML.new(self, heading_ids: heading_ids).render
       return body unless standalone
 
       wrap_standalone_html(body, title: title.to_s, lang: lang.to_s, css: css, theme: Theme.css(theme))

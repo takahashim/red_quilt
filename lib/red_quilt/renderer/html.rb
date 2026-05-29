@@ -3,10 +3,11 @@
 module RedQuilt
   module Renderer
     class HTML
-      def initialize(document)
+      def initialize(document, heading_ids: false)
         @document = document
         @arena = document.arena
         @out = +""
+        @slugger = Slug::Counter.new if heading_ids
       end
 
       def render
@@ -45,7 +46,12 @@ module RedQuilt
           @out << "</p>\n"
         when NodeType::HEADING
           level = @arena.int1(node_id)
-          @out << "<h#{level}>"
+          if @slugger
+            id = @slugger.generate(PlainText.from(@arena, node_id))
+            @out << %(<h#{level} id="#{escape_html(id)}">)
+          else
+            @out << "<h#{level}>"
+          end
           render_children(node_id)
           @out << "</h#{level}>\n"
         when NodeType::THEMATIC_BREAK
