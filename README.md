@@ -137,6 +137,12 @@ redquilt --extended-autolinks --footnotes input.md
 
 # Standalone page with the bare template (no embedded CSS)
 redquilt --theme none input.md
+
+# Write HTML to a file instead of stdout
+redquilt -o output.html input.md
+
+# Render and open the result in the default browser
+redquilt --open input.md
 ```
 
 ### Options
@@ -154,6 +160,10 @@ redquilt --theme none input.md
 --lang LANG              html lang attribute (default: "en")
 --css URL                Add a stylesheet link
 --theme THEME            Embedded stylesheet: default (default) or none
+-o, --output FILE        Write HTML to FILE instead of stdout
+--open                   Write HTML to a file and open it in the default
+                         browser (forces --standalone; uses a file under
+                         Dir.tmpdir when -o is not given)
 --diagnostics            Print diagnostics to stderr
 --diagnostics-only       Print diagnostics only (suppress output)
 -h, --help               Show help

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "fileutils"
 require "stringio"
 require "tempfile"
 require "red_quilt/cli"
@@ -193,6 +194,81 @@ RSpec.describe RedQuilt::CLI do
       expect(code).to eq(0)
       expect(out).to eq("")
       expect(err).to include("unsafe_url")
+    end
+  end
+
+  describe "--output / -o" do
+    it "writes HTML to FILE instead of stdout" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "out.html")
+        code, out, _ = run(["--no-standalone", "-o", path], input: "# Hello\n")
+        expect(code).to eq(0)
+        expect(out).to eq("")
+        expect(File.read(path)).to eq("<h1>Hello</h1>\n")
+      end
+    end
+  end
+
+  describe "--open" do
+    it "writes HTML to a tmpdir file and launches the browser" do
+      launcher = instance_double(RedQuilt::BrowserLauncher, launch: nil)
+      allow(RedQuilt::BrowserLauncher).to receive(:new).and_return(launcher)
+
+      code, out, err = run(["--open"], input: "# Hi\n")
+      expect(code).to eq(0)
+      expect(out).to eq("")
+      expect(err).to eq("")
+      expected = File.join(Dir.tmpdir, "redquilt-stdin.html")
+      expect(launcher).to have_received(:launch).with(expected)
+      expect(File.read(expected)).to start_with("<!DOCTYPE html>\n")
+      expect(File.read(expected)).to include("<h1>Hi</h1>")
+    ensure
+      FileUtils.rm_f(expected) if expected
+    end
+
+    it "forces standalone even with --no-standalone" do
+      launcher = instance_double(RedQuilt::BrowserLauncher, launch: nil)
+      allow(RedQuilt::BrowserLauncher).to receive(:new).and_return(launcher)
+
+      code, _, _ = run(["--open", "--no-standalone"], input: "# Hi\n")
+      expect(code).to eq(0)
+      path = File.join(Dir.tmpdir, "redquilt-stdin.html")
+      expect(File.read(path)).to start_with("<!DOCTYPE html>\n")
+    ensure
+      FileUtils.rm_f(path) if path
+    end
+
+    it "derives the tmpdir filename from the input file basename" do
+      launcher = instance_double(RedQuilt::BrowserLauncher, launch: nil)
+      allow(RedQuilt::BrowserLauncher).to receive(:new).and_return(launcher)
+
+      Tempfile.open(["sample", ".md"]) do |f|
+        f.write("# X\n")
+        f.flush
+        run(["--open", f.path])
+        expected = File.join(Dir.tmpdir, "redquilt-#{File.basename(f.path, '.*')}.html")
+        expect(launcher).to have_received(:launch).with(expected)
+        FileUtils.rm_f(expected)
+      end
+    end
+
+    it "combines with -o to open the user-specified file" do
+      launcher = instance_double(RedQuilt::BrowserLauncher, launch: nil)
+      allow(RedQuilt::BrowserLauncher).to receive(:new).and_return(launcher)
+
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "out.html")
+        code, _, _ = run(["--open", "-o", path], input: "# Hi\n")
+        expect(code).to eq(0)
+        expect(launcher).to have_received(:launch).with(path)
+        expect(File.read(path)).to start_with("<!DOCTYPE html>\n")
+      end
+    end
+
+    it "rejects --open combined with non-HTML formats" do
+      code, _, err = run(["--open", "--format", "json"], input: "# Hi\n")
+      expect(code).to eq(1)
+      expect(err).to include("--open requires --format html")
     end
   end
 

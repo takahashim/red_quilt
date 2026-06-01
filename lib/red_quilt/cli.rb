@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require "optparse"
+require "tmpdir"
 require "red_quilt"
+require "red_quilt/browser_launcher"
 
 module RedQuilt
   # Entry point for the `redquilt` executable. Defined as a module-level
@@ -34,6 +36,8 @@ module RedQuilt
       lang: "en",
       css: nil,
       theme: :default,
+      output: nil,
+      open: false,
     }.freeze
 
     THEMES = %i[none default].freeze
@@ -44,6 +48,13 @@ module RedQuilt
       options = parse_options(argv, stderr: stderr)
       return options if options.is_a?(Integer)
 
+      if options[:open] && options[:format] != :html
+        stderr.puts "redquilt: --open requires --format html"
+        return 1
+      end
+      options[:standalone] = true if options[:open]
+
+      source_path = argv.first
       source = read_source(argv, stdin: stdin, stderr: stderr)
       return 1 unless source
 
@@ -54,15 +65,7 @@ module RedQuilt
                            lint: options[:lint])
 
       unless options[:diagnostics_only]
-        case options[:format]
-        when :html
-          stdout.write(render_html(doc, options))
-        when :ast
-          require "pp"
-          PP.pp(doc.to_ast, stdout)
-        when :json
-          stdout.puts doc.to_json
-        end
+        emit_output(doc, options, source_path: source_path, stdout: stdout, stderr: stderr)
       end
 
       if options[:diagnostics] || options[:diagnostics_only]
@@ -70,6 +73,35 @@ module RedQuilt
       end
 
       doc.diagnostics.any? { |d| d.severity == :error } ? 1 : 0
+    end
+
+    def self.emit_output(doc, options, source_path:, stdout:, stderr:)
+      destination = output_destination(options, source_path)
+
+      case options[:format]
+      when :html
+        html = render_html(doc, options)
+        if destination
+          File.write(destination, html)
+        else
+          stdout.write(html)
+        end
+      when :ast
+        require "pp"
+        PP.pp(doc.to_ast, stdout)
+      when :json
+        stdout.puts doc.to_json
+      end
+
+      BrowserLauncher.new(err: stderr).launch(destination) if options[:open] && destination
+    end
+
+    def self.output_destination(options, source_path)
+      return options[:output] if options[:output]
+      return nil unless options[:open]
+
+      base = source_path ? File.basename(source_path, ".*") : "stdin"
+      File.join(Dir.tmpdir, "redquilt-#{base}.html")
     end
 
     def self.parse_options(argv, stderr:)
@@ -114,6 +146,13 @@ module RedQuilt
         opts.on("--theme THEME", THEMES,
                 "Embedded stylesheet: default (the default) or none (bare HTML)") do |t|
           options[:theme] = t
+        end
+        opts.on("-o", "--output FILE", "Write HTML to FILE instead of stdout") do |f|
+          options[:output] = f
+        end
+        opts.on("--open",
+                "Write HTML to a file and open it in the default browser (forces --standalone)") do
+          options[:open] = true
         end
         opts.on("--diagnostics", "Also print diagnostics to stderr") do
           options[:diagnostics] = true
