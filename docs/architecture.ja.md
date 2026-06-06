@@ -35,7 +35,7 @@ Source (Markdown String)
 ## 各ステージの責務
 
 ### `RedQuilt.normalize_input`
-CommonMark§2.3/2.4の最小前処理。`\r\n`/`\r`→`\n`の行末正規化と、NUL→U+FFFDの置換だけを行う。
+- CommonMark§2.3/2.4の最小前処理。`\r\n`/`\r`→`\n`の行末正規化と、NUL→U+FFFDの置換だけを行う。
 
 ### BlockParser
 - 行分割: sourceを`Line` Struct配列へ。各行はbyte spanで保持する。

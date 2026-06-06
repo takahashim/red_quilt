@@ -100,9 +100,9 @@ Native options (`allow_html:`, `footnotes:`, …) pass straight through; Tilt's 
 ## Documentation
 
 - [API reference](docs/api.md) — `Document` / `NodeRef` / `SourceSpan`, supported syntax, and usage examples
-- [Architecture overview](docs/architecture.ja.md) (日本語)
-- [Arena usage guide](docs/arena-usage.ja.md) (日本語)
-- [CommonMark conformance notes](docs/commonmark-conformance.ja.md) (日本語)
+- [Architecture overview](docs/architecture.md) ([日本語](docs/architecture.ja.md))
+- [Arena usage guide](docs/arena-usage.md) ([日本語](docs/arena-usage.ja.md))
+- [CommonMark conformance notes](docs/commonmark-conformance.md) ([日本語](docs/commonmark-conformance.ja.md))
 
 ## CommonMark Compatibility
 
