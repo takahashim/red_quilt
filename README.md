@@ -216,7 +216,9 @@ RedQuilt.render_html(user_markdown, allow_html: true)
 bundle exec rake spec
 ```
 
-Runs 70+ CommonMark compatibility and feature tests.
+Runs the full CommonMark 0.31.2 conformance suite (all 652 official examples,
+parsed directly from `spec/fixtures/cmark_spec-0.31.2.md`) plus RedQuilt's own
+feature tests — 1000 examples in total.
 
 ### Benchmark
 
