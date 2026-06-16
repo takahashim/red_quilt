@@ -23,6 +23,10 @@ doc.disallow_raw_html? # Check GFM disallowed-raw-HTML filtering setting
 doc.to_html(standalone: true, theme: :default, title: "My Doc", lang: "en")
 # theme: :default (compact, dark-mode-aware stylesheet) or :none (bare).
 # css: "style.css" links an external stylesheet instead.
+
+# Render `mermaid` code blocks as <pre class="mermaid"> diagrams; in
+# standalone mode the mermaid.js runtime is loaded from a CDN too.
+doc.to_html(standalone: true, mermaid: true)
 ```
 
 ## NodeRef (AST node wrapper)

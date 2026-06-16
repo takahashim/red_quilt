@@ -173,6 +173,22 @@ RSpec.describe RedQuilt::CLI do
     end
   end
 
+  describe "--mermaid" do
+    it "renders mermaid blocks as <pre class=\"mermaid\"> and loads the runtime" do
+      code, out, _ = run(["--mermaid"], input: "```mermaid\ngraph LR\n  A --> B\n```\n")
+      expect(code).to eq(0)
+      expect(out).to include('<pre class="mermaid">')
+      expect(out).to include("cdn.jsdelivr.net/npm/mermaid")
+    end
+
+    it "leaves mermaid blocks as plain code blocks without the flag" do
+      code, out, _ = run([], input: "```mermaid\ngraph LR\n```\n")
+      expect(code).to eq(0)
+      expect(out).to include('<pre><code class="language-mermaid">')
+      expect(out).not_to include("cdn.jsdelivr.net")
+    end
+  end
+
   describe "--diagnostics" do
     it "writes diagnostics to stderr while still rendering HTML" do
       code, out, err = run(["--no-standalone", "--diagnostics"], input: "[a](javascript:1)\n")

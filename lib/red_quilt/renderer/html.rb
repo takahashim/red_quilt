@@ -3,11 +3,12 @@
 module RedQuilt
   module Renderer
     class HTML
-      def initialize(document, heading_ids: false)
+      def initialize(document, heading_ids: false, mermaid: false)
         @document = document
         @arena = document.arena
         @out = +""
         @slugger = Slug::Counter.new if heading_ids
+        @mermaid = mermaid
       end
 
       def render
@@ -73,12 +74,21 @@ module RedQuilt
           render_list_item(node_id)
           @out << "</li>\n"
         when NodeType::CODE_BLOCK
-          @out << "<pre><code"
           info_word = @arena.str2(node_id).to_s.split.first.to_s
-          @out << %( class="language-#{escape_html(info_word)}") unless info_word.empty?
-          @out << ">"
-          @out << escape_html(@arena.text(node_id).to_s)
-          @out << "</code></pre>\n"
+          if @mermaid && info_word == "mermaid"
+            # Emit a container mermaid.js recognizes via class="mermaid".
+            # The diagram source is still HTML-escaped; the browser decodes
+            # the entities back into textContent, which is what mermaid reads.
+            @out << %(<pre class="mermaid">)
+            @out << escape_html(@arena.text(node_id).to_s)
+            @out << "</pre>\n"
+          else
+            @out << "<pre><code"
+            @out << %( class="language-#{escape_html(info_word)}") unless info_word.empty?
+            @out << ">"
+            @out << escape_html(@arena.text(node_id).to_s)
+            @out << "</code></pre>\n"
+          end
         when NodeType::HTML_BLOCK
           render_raw_html(@arena.text(node_id).to_s, block: true)
         when NodeType::TABLE

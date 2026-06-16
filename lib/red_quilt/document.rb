@@ -47,11 +47,15 @@ module RedQuilt
     #   (an external stylesheet link) is independent and may be combined.
     # heading_ids: when true, every heading gets a slugified `id` (Unicode
     #   preserving, deduplicated within the document) for anchor links.
-    def to_html(standalone: false, title: nil, lang: "en", css: nil, theme: :none, heading_ids: false)
-      body = Renderer::HTML.new(self, heading_ids: heading_ids).render
+    # mermaid: when true, fenced code blocks tagged `mermaid` render as
+    #   `<pre class="mermaid">` containers instead of `<pre><code>`. In
+    #   standalone mode the mermaid.js runtime is also loaded from a CDN so
+    #   the diagrams render in the browser without further setup.
+    def to_html(standalone: false, title: nil, lang: "en", css: nil, theme: :none, heading_ids: false, mermaid: false)
+      body = Renderer::HTML.new(self, heading_ids: heading_ids, mermaid: mermaid).render
       return body unless standalone
 
-      wrap_standalone_html(body, title: title.to_s, lang: lang.to_s, css: css, theme: Theme.css(theme))
+      wrap_standalone_html(body, title: title.to_s, lang: lang.to_s, css: css, theme: Theme.css(theme), mermaid: mermaid)
     end
 
     def to_ast
@@ -87,7 +91,68 @@ module RedQuilt
 
     private
 
-    def wrap_standalone_html(body, title:, lang:, css:, theme:)
+    # Self-contained assets embedded in standalone output when mermaid
+    # support is enabled. Loads the mermaid.js runtime from a CDN as an ES
+    # module, renders every `<pre class="mermaid">` container, then makes
+    # each diagram interactive with svg-pan-zoom (also from a CDN): mouse
+    # wheel zooms, drag pans, and a small control panel offers +/-/reset.
+    MERMAID_SCRIPT = <<~HTML
+      <style>
+      .rq-mermaid-pz {
+        /* Break out of the body's max-width column so the viewport isn't a
+           narrow peephole: span most of the viewport width, centered. */
+        width: 80vw;
+        margin-left: calc(50% - 40vw);
+        height: 80vh;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .rq-mermaid-pz svg {
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        display: block;
+        cursor: grab;
+      }
+      @media (prefers-color-scheme: dark) {
+        .rq-mermaid-pz { border-color: #30363d; }
+      }
+      </style>
+      <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs";
+      import svgPanZoom from "https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/+esm";
+      mermaid.initialize({ startOnLoad: false });
+      await mermaid.run();
+
+      for (const pre of document.querySelectorAll("pre.mermaid")) {
+        const svg = pre.querySelector("svg");
+        if (!svg) continue;
+        // Drop mermaid's inline max-width and let the SVG fill a sized box so
+        // svg-pan-zoom has room to zoom/pan. The whole viewBox scales as one,
+        // so every element stays aligned.
+        svg.removeAttribute("style");
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+        const box = document.createElement("div");
+        box.className = "rq-mermaid-pz";
+        pre.replaceWith(box);
+        box.appendChild(svg);
+        svgPanZoom(svg, {
+          zoomEnabled: true,
+          controlIconsEnabled: true,
+          fit: true,
+          center: true,
+          zoomScaleSensitivity: 0.3,
+          minZoom: 0.2,
+          maxZoom: 20,
+        });
+      }
+      </script>
+    HTML
+    private_constant :MERMAID_SCRIPT
+
+    def wrap_standalone_html(body, title:, lang:, css:, theme:, mermaid: false)
       out = +"<!DOCTYPE html>\n"
       out << %(<html lang="#{html_escape_attr(lang)}">\n)
       out << "<head>\n"
@@ -97,6 +162,7 @@ module RedQuilt
       out << "<style>\n#{theme}</style>\n" if theme
       out << "</head>\n<body>\n"
       out << body
+      out << MERMAID_SCRIPT if mermaid
       out << "</body>\n</html>\n"
       out
     end

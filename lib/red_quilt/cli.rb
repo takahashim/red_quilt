@@ -38,6 +38,7 @@ module RedQuilt
       theme: :default,
       output: nil,
       open: false,
+      mermaid: false,
     }.freeze
 
     THEMES = %i[none default].freeze
@@ -154,6 +155,10 @@ module RedQuilt
                 "Write HTML to a file and open it in the default browser (forces --standalone)") do
           options[:open] = true
         end
+        opts.on("--mermaid",
+                "Render `mermaid` code blocks as diagrams (loads mermaid.js from a CDN in standalone output)") do
+          options[:mermaid] = true
+        end
         opts.on("--diagnostics", "Also print diagnostics to stderr") do
           options[:diagnostics] = true
         end
@@ -206,6 +211,7 @@ module RedQuilt
         lang: options[:lang],
         css: options[:css],
         theme: options[:theme],
+        mermaid: options[:mermaid],
       )
     end
 

@@ -57,13 +57,13 @@ module RedQuilt
       document
     end
 
-    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false, heading_ids: false)
+    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false, heading_ids: false, mermaid: false)
       parse(source,
             allow_html: allow_html,
             disallow_raw_html: disallow_raw_html,
             extended_autolinks: extended_autolinks,
             footnotes: footnotes,
-            lint: lint).to_html(heading_ids: heading_ids)
+            lint: lint).to_html(heading_ids: heading_ids, mermaid: mermaid)
     end
 
     private

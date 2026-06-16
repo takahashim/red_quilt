@@ -75,13 +75,30 @@ doc.diagnostics.first.severity # => :warning
 ### Heading anchors (opt-in)
 
 `render_html` / `to_html` accept `heading_ids:` to give every heading a
-slugified `id` for anchor links. Slugs follow GitHub's scheme but keep Unicode
-intact, so Japanese headings stay readable; duplicates get `-1`, `-2` suffixes.
+slugified `id` for anchor links.
 
 ```ruby
 RedQuilt.render_html("# Hello World\n\n## はじめに", heading_ids: true)
 # => "<h1 id=\"hello-world\">Hello World</h1>\n<h2 id=\"はじめに\">はじめに</h2>\n"
 ```
+
+### Mermaid diagrams (opt-in)
+
+`render_html` / `to_html` accept `mermaid:` to render ` ```mermaid ` fenced
+code blocks for [mermaid.js](https://mermaid.js.org/).
+In standalone output the mermaid.js runtime is also loaded from a CDN.
+
+```ruby
+RedQuilt.render_html("```mermaid\ngraph LR\n  A --> B\n```", mermaid: true)
+# => "<pre class=\"mermaid\">graph LR\n  A --&gt; B\n</pre>\n"
+
+# Full page that renders the diagram in a browser (CDN script included):
+RedQuilt.parse("```mermaid\ngraph LR\n  A --> B\n```")
+        .to_html(standalone: true, mermaid: true)
+```
+
+In standalone output each diagram is made interactive with
+[svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom) (loaded from a CDN).
 
 ### Tilt integration
 
@@ -106,7 +123,7 @@ Native options (`allow_html:`, `footnotes:`, …) pass straight through; Tilt's 
 
 ## CommonMark Compatibility
 
-RedQuilt achieves 100% compliance with the CommonMark v0.31.2 specification.
+RedQuilt achieves 100% compliance with the CommonMark v0.31.2 test cases.
 See the [conformance notes](docs/commonmark-conformance.ja.md) for GFM
 extensions and intentional deviations.
 
@@ -143,6 +160,9 @@ redquilt -o output.html input.md
 
 # Render and open the result in the default browser
 redquilt --open input.md
+
+# Render mermaid code blocks as diagrams (loads mermaid.js from a CDN)
+redquilt --mermaid --open input.md
 ```
 
 ### Options
@@ -164,6 +184,8 @@ redquilt --open input.md
 --open                   Write HTML to a file and open it in the default
                          browser (forces --standalone; uses a file under
                          Dir.tmpdir when -o is not given)
+--mermaid                Render `mermaid` code blocks as diagrams (loads
+                         mermaid.js from a CDN in standalone output)
 --diagnostics            Print diagnostics to stderr
 --diagnostics-only       Print diagnostics only (suppress output)
 -h, --help               Show help
