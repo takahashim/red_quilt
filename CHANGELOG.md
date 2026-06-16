@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Opt-in Mermaid diagram support via the `mermaid:` option on `render_html` /
+  `Document#to_html` and the `--mermaid` CLI flag (off by default). Fenced
+  ` ```mermaid ` code blocks render as `<pre class="mermaid">` containers; in
+  standalone output the mermaid.js runtime is loaded from a CDN and each
+  diagram is made interactive (wheel zoom, drag pan, +/-/reset controls) with
+  svg-pan-zoom.
+
+## [0.7.1] - 2026-06-06
+
+### Added
+
+- `--open` CLI flag: render the Markdown to a standalone HTML file and open it
+  in the default browser (forces `--standalone`; writes under `Dir.tmpdir`
+  when `-o` is not given).
+
 ## [0.7.0] - 2026-05-29
 
 ### Added
