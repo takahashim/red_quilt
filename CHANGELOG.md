@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in YAML frontmatter support via the `frontmatter:` option on `parse` /
+  `render_html` and the `--frontmatter` CLI flag (off by default). A leading
+  `---` … `---` block is removed from the rendered body and exposed as
+  `Document#frontmatter`; in standalone output its `title` / `lang` keys fill
+  in `<title>` / `<html lang>`.
 - Opt-in Mermaid diagram support via the `mermaid:` option on `render_html` /
   `Document#to_html` and the `--mermaid` CLI flag (off by default). Fenced
   ` ```mermaid ` code blocks render as `<pre class="mermaid">` containers; in

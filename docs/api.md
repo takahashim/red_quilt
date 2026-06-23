@@ -18,6 +18,7 @@ doc.source_map        # Line/column lookup (lazy memoized)
 doc.diagnostics       # Array of RedQuilt::Diagnostic collected while parsing
 doc.allow_html?       # Check HTML pass-through setting
 doc.disallow_raw_html? # Check GFM disallowed-raw-HTML filtering setting
+doc.frontmatter       # Parsed YAML frontmatter Hash, or nil (see below)
 
 # Standalone document with an embedded theme:
 doc.to_html(standalone: true, theme: :default, title: "My Doc", lang: "en")
@@ -27,6 +28,15 @@ doc.to_html(standalone: true, theme: :default, title: "My Doc", lang: "en")
 # Render `mermaid` code blocks as <pre class="mermaid"> diagrams; in
 # standalone mode the mermaid.js runtime is loaded from a CDN too.
 doc.to_html(standalone: true, mermaid: true)
+
+# Parse a leading YAML frontmatter block (--- ... ---). Off by default; when
+# enabled the block is removed from the rendered body and exposed as a Hash.
+doc = RedQuilt.parse("---\ntitle: Hi\nlang: ja\n---\n\n# Body", frontmatter: true)
+doc.frontmatter       # => {"title" => "Hi", "lang" => "ja"} (nil when absent/disabled)
+# In standalone output frontmatter title/lang fill <title>/<html lang> unless
+# an explicit argument overrides them. Invalid YAML adds a :frontmatter
+# warning diagnostic and leaves doc.frontmatter as nil.
+doc.to_html(standalone: true)
 ```
 
 ## NodeRef (AST node wrapper)

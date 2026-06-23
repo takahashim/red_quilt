@@ -15,6 +15,7 @@ require_relative "red_quilt/theme"
 require_relative "red_quilt/document"
 require_relative "red_quilt/inline"
 require_relative "red_quilt/inline/html_entities"
+require_relative "red_quilt/frontmatter"
 require_relative "red_quilt/reference_definition"
 require_relative "red_quilt/footnote_registry"
 require_relative "red_quilt/footnote_definition"
@@ -38,8 +39,13 @@ module RedQuilt
   class Error < StandardError; end
 
   class << self
-    def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false)
+    def parse(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false, frontmatter: false)
       normalized = normalize_input(source)
+      frontmatter_diagnostics = []
+      if frontmatter
+        frontmatter_data, normalized =
+          Frontmatter.extract(normalized, diagnostics: frontmatter_diagnostics)
+      end
       arena = Arena.new(normalized)
       footnote_registry = FootnoteRegistry.new if footnotes
       block_parser = BlockParser.new(arena, footnotes: footnote_registry)
@@ -48,7 +54,9 @@ module RedQuilt
                               allow_html: allow_html,
                               disallow_raw_html: disallow_raw_html,
                               references: block_parser.references,
-                              footnotes: footnote_registry)
+                              footnotes: footnote_registry,
+                              frontmatter: frontmatter_data)
+      document.diagnostics.concat(frontmatter_diagnostics)
       document.diagnostics.concat(block_parser.diagnostics)
       InlinePass.new(document).apply
       FootnotePass.new(document).apply if footnote_registry
@@ -57,13 +65,14 @@ module RedQuilt
       document
     end
 
-    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false, heading_ids: false, mermaid: false)
+    def render_html(source, allow_html: false, disallow_raw_html: false, extended_autolinks: false, footnotes: false, lint: false, frontmatter: false, heading_ids: false, mermaid: false)
       parse(source,
             allow_html: allow_html,
             disallow_raw_html: disallow_raw_html,
             extended_autolinks: extended_autolinks,
             footnotes: footnotes,
-            lint: lint).to_html(heading_ids: heading_ids, mermaid: mermaid)
+            lint: lint,
+            frontmatter: frontmatter).to_html(heading_ids: heading_ids, mermaid: mermaid)
     end
 
     private

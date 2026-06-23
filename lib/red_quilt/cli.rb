@@ -33,12 +33,13 @@ module RedQuilt
       standalone: true,
       auto_title: false,
       title: nil,
-      lang: "en",
+      lang: nil,
       css: nil,
       theme: :default,
       output: nil,
       open: false,
       mermaid: false,
+      frontmatter: false,
     }.freeze
 
     THEMES = %i[none default].freeze
@@ -63,7 +64,8 @@ module RedQuilt
                            allow_html: options[:allow_html],
                            disallow_raw_html: options[:disallow_raw_html],
                            extended_autolinks: options[:extended_autolinks],
-                           lint: options[:lint])
+                           lint: options[:lint],
+                           frontmatter: options[:frontmatter])
 
       unless options[:diagnostics_only]
         emit_output(doc, options, source_path: source_path, stdout: stdout, stderr: stderr)
@@ -158,6 +160,10 @@ module RedQuilt
         opts.on("--mermaid",
                 "Render `mermaid` code blocks as diagrams (loads mermaid.js from a CDN in standalone output)") do
           options[:mermaid] = true
+        end
+        opts.on("--frontmatter",
+                "Parse leading YAML frontmatter (---) as metadata; fills <title>/lang in standalone output") do
+          options[:frontmatter] = true
         end
         opts.on("--diagnostics", "Also print diagnostics to stderr") do
           options[:diagnostics] = true

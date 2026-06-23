@@ -2,9 +2,9 @@
 
 module RedQuilt
   class Document
-    attr_reader :source, :arena, :root_id, :references, :footnotes
+    attr_reader :source, :arena, :root_id, :references, :footnotes, :frontmatter
 
-    def initialize(source, arena, root_id, allow_html: false, disallow_raw_html: false, references: {}, footnotes: nil)
+    def initialize(source, arena, root_id, allow_html: false, disallow_raw_html: false, references: {}, footnotes: nil, frontmatter: nil)
       @source = source
       @arena = arena
       @root_id = root_id
@@ -12,6 +12,7 @@ module RedQuilt
       @disallow_raw_html = disallow_raw_html
       @references = references
       @footnotes = footnotes
+      @frontmatter = frontmatter
     end
 
     def allow_html?
@@ -51,11 +52,18 @@ module RedQuilt
     #   `<pre class="mermaid">` containers instead of `<pre><code>`. In
     #   standalone mode the mermaid.js runtime is also loaded from a CDN so
     #   the diagrams render in the browser without further setup.
-    def to_html(standalone: false, title: nil, lang: "en", css: nil, theme: :none, heading_ids: false, mermaid: false)
+    #
+    # When standalone and the document was parsed with `frontmatter: true`,
+    # the frontmatter's `title` / `lang` keys fill in the corresponding
+    # `<title>` / `<html lang>` if no explicit argument was given
+    # (explicit argument > frontmatter > default).
+    def to_html(standalone: false, title: nil, lang: nil, css: nil, theme: :none, heading_ids: false, mermaid: false)
       body = Renderer::HTML.new(self, heading_ids: heading_ids, mermaid: mermaid).render
       return body unless standalone
 
-      wrap_standalone_html(body, title: title.to_s, lang: lang.to_s, css: css, theme: Theme.css(theme), mermaid: mermaid)
+      effective_title = title || frontmatter_value("title")
+      effective_lang = lang || frontmatter_value("lang") || "en"
+      wrap_standalone_html(body, title: effective_title.to_s, lang: effective_lang.to_s, css: css, theme: Theme.css(theme), mermaid: mermaid)
     end
 
     def to_ast
@@ -90,6 +98,12 @@ module RedQuilt
     end
 
     private
+
+    def frontmatter_value(key)
+      return nil unless @frontmatter.is_a?(Hash)
+
+      @frontmatter[key]
+    end
 
     # Self-contained assets embedded in standalone output when mermaid
     # support is enabled. Loads the mermaid.js runtime from a CDN as an ES

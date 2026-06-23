@@ -189,6 +189,30 @@ RSpec.describe RedQuilt::CLI do
     end
   end
 
+  describe "--frontmatter" do
+    it "fills <title> and lang from frontmatter and drops it from the body" do
+      code, out, _ = run(["--frontmatter"], input: "---\ntitle: My Page\nlang: ja\n---\n\n# Body\n")
+      expect(code).to eq(0)
+      expect(out).to include("<title>My Page</title>")
+      expect(out).to include(%(<html lang="ja">))
+      expect(out).to include("<h1>Body</h1>")
+      expect(out).not_to include("title: My Page")
+    end
+
+    it "leaves the --- block in the body without the flag" do
+      code, out, _ = run([], input: "---\ntitle: Hi\n---\n\n# Body\n")
+      expect(code).to eq(0)
+      expect(out).to include("Hi")
+    end
+
+    it "lets --title override the frontmatter title" do
+      code, out, _ = run(["--frontmatter", "--title", "Explicit"],
+                         input: "---\ntitle: From FM\n---\n\n# Body\n")
+      expect(code).to eq(0)
+      expect(out).to include("<title>Explicit</title>")
+    end
+  end
+
   describe "--diagnostics" do
     it "writes diagnostics to stderr while still rendering HTML" do
       code, out, err = run(["--no-standalone", "--diagnostics"], input: "[a](javascript:1)\n")

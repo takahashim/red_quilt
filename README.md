@@ -48,6 +48,7 @@ RedQuilt.render_html("Hi <em>tag</em>", allow_html: true)
 | `extended_autolinks:` | `false` | GFM: linkify bare `http(s)://` / `www.` / email addresses |
 | `footnotes:` | `false` | GFM footnotes (see below) |
 | `lint:` | `false` | Collect lint diagnostics (empty links, missing image alt, heading-level skips) |
+| `frontmatter:` | `false` | Parse leading YAML frontmatter (`---`) as metadata (see below) |
 
 ### Footnotes (opt-in)
 
@@ -99,6 +100,41 @@ RedQuilt.parse("```mermaid\ngraph LR\n  A --> B\n```")
 
 In standalone output each diagram is made interactive with
 [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom) (loaded from a CDN).
+
+### YAML frontmatter (opt-in)
+
+`parse` / `render_html` accept `frontmatter:` to extract a leading YAML
+frontmatter block (the `---` … `---` fences used by Jekyll, Hugo).
+The block is parsed with `Psych.safe_load` and removed from the rendered body;
+the parsed Hash is exposed as `Document#frontmatter`.
+
+```ruby
+doc = RedQuilt.parse(<<~MD, frontmatter: true)
+  ---
+  title: My Page
+  lang: ja
+  ---
+
+  # Body
+MD
+doc.frontmatter            # => {"title" => "My Page", "lang" => "ja"}
+doc.to_html               # => "<h1>Body</h1>\n"  (frontmatter stripped)
+```
+
+In standalone output the frontmatter's `title` / `lang` fill in `<title>` /
+`<html lang>` when no explicit argument is given (explicit argument >
+frontmatter > default):
+
+```ruby
+doc.to_html(standalone: true)
+# <html lang="ja"> … <title>My Page</title> …
+```
+
+The feature is opt-in, so a bare `---` is never mistaken for frontmatter
+unless `frontmatter: true` is passed. Frontmatter lines are blanked rather
+than deleted, so body source spans and diagnostic line numbers stay relative
+to the start of the file. Invalid YAML records a `:frontmatter` warning
+diagnostic and leaves `Document#frontmatter` as `nil` without raising.
 
 ### Tilt integration
 
@@ -186,6 +222,8 @@ redquilt --mermaid --open input.md
                          Dir.tmpdir when -o is not given)
 --mermaid                Render `mermaid` code blocks as diagrams (loads
                          mermaid.js from a CDN in standalone output)
+--frontmatter            Parse leading YAML frontmatter (---) as metadata;
+                         fills <title>/lang in standalone output
 --diagnostics            Print diagnostics to stderr
 --diagnostics-only       Print diagnostics only (suppress output)
 -h, --help               Show help
