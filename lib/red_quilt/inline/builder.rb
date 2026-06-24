@@ -9,22 +9,10 @@ module RedQuilt
     #   1. linear_pass — code spans, brackets (link/image), autolinks,
     #      HTML, simple inlines. Emphasis delimiter runs are added as
     #      provisional TEXT nodes and pushed onto a delimiter stack.
-    #   2. process_emphasis — CommonMark spec 6.2 algorithm pairs up
-    #      delimiter stack entries into EMPHASIS / STRONG nodes.
+    #   2. EmphasisResolver#resolve — CommonMark spec 6.2 algorithm pairs
+    #      up delimiter stack entries into EMPHASIS / STRONG nodes
+    #      (delegated to Inline::EmphasisResolver).
     class Builder
-      SAFE_SCHEMES = %w[http https mailto ftp tel ssh].freeze
-      # Autolinks (`<scheme:...>`) are not run through the SAFE_SCHEMES
-      # allowlist: CommonMark permits arbitrary schemes there (e.g.
-      # `<made-up-scheme://x>`), and an allowlist would break that
-      # conformance. Only the schemes that execute script when the link
-      # is navigated are denied.
-      UNSAFE_AUTOLINK_SCHEMES = %w[javascript vbscript data].freeze
-
-      # `count` is the CommonMark delimiter-run length; a Delimiter is
-      # never enumerated, so shadowing Struct#count (from Enumerable) is
-      # intentional rather than a footgun.
-      Delimiter = Struct.new(:node_id, :char, :count, :can_open, :can_close) # rubocop:disable Lint/StructNewOverride
-
       Bracket = Struct.new(:token_id, :node_id, :image, :active, :delim_stack_size)
 
       # track_source: when true, arena nodes carry the byte ranges supplied
@@ -49,6 +37,7 @@ module RedQuilt
         @diagnostics = diagnostics
         @footnotes = footnotes
         @link_scanner = LinkScanner.new(source)
+        @emphasis = EmphasisResolver.new(arena, track_source: track_source)
       end
 
       def build(parent_id, tokens)
@@ -58,7 +47,7 @@ module RedQuilt
         @bracket_stack = []
         @provisional_nodes = {}
         linear_pass
-        process_emphasis(@delimiter_stack)
+        @emphasis.resolve(@delimiter_stack, @provisional_nodes)
       end
 
       private
@@ -228,27 +217,10 @@ module RedQuilt
         link_id = add_arena_node(
           NodeType::LINK,
           @tokens.start_byte(id), @tokens.end_byte(id),
-          str1: block_unsafe_autolink(@link_scanner.normalize_uri(destination)),
+          str1: UrlSanitizer.block_unsafe_autolink(@link_scanner.normalize_uri(destination), @diagnostics),
         )
         @arena.append_child(@parent_id, link_id)
         @arena.append_child(link_id, @arena.add_node(NodeType::TEXT, str1: label))
-      end
-
-      # Returns "" (blocking the href) for autolink destinations whose
-      # scheme executes script on navigation; otherwise the destination
-      # is returned unchanged. Unlike sanitize_destination this is a
-      # denylist, to stay CommonMark-conformant for benign custom schemes.
-      def block_unsafe_autolink(destination)
-        scheme = destination[%r{\A([a-zA-Z][a-zA-Z0-9+\-.]*):}, 1]
-        return destination if scheme.nil?
-        return destination unless UNSAFE_AUTOLINK_SCHEMES.include?(scheme.downcase)
-
-        report_diagnostic(
-          severity: :warning,
-          rule: :unsafe_url,
-          message: "Unsafe URL scheme #{scheme.downcase.inspect} blocked",
-        )
-        ""
       end
 
       # --------------------------- code spans -----------------------------
@@ -400,7 +372,7 @@ module RedQuilt
         link_kind = opener.image ? NodeType::IMAGE : NodeType::LINK
         link_id = add_arena_node(
           link_kind, opener_start, match[:end_byte],
-          str1: sanitize_destination(match[:destination]),
+          str1: UrlSanitizer.sanitize_destination(match[:destination], @diagnostics),
           str2: match[:title],
         )
 
@@ -416,7 +388,7 @@ module RedQuilt
         @arena.detach(opener.node_id)
 
         inner_delims = @delimiter_stack.slice!(opener.delim_stack_size..) || []
-        process_emphasis(inner_delims)
+        @emphasis.resolve(inner_delims, @provisional_nodes)
 
         @bracket_stack.delete_at(opener_index)
 
@@ -489,22 +461,6 @@ module RedQuilt
         last
       end
 
-      def sanitize_destination(destination)
-        return "" if destination.nil?
-        return destination if destination.start_with?("/", "#")
-
-        scheme = destination[%r{\A([a-zA-Z][a-zA-Z0-9+\-.]*):}, 1]
-        return destination if scheme.nil?
-        return destination if SAFE_SCHEMES.include?(scheme.downcase)
-
-        report_diagnostic(
-          severity: :warning,
-          rule: :unsafe_url,
-          message: "Unsafe URL scheme #{scheme.downcase.inspect} blocked",
-        )
-        ""
-      end
-
       def report_diagnostic(severity:, rule:, message:, source_span: nil)
         return unless @diagnostics
 
@@ -530,144 +486,11 @@ module RedQuilt
         @arena.append_child(@parent_id, node_id)
         @provisional_nodes[node_id] = true
 
-        @delimiter_stack << Delimiter.new(
+        @delimiter_stack << EmphasisResolver::Delimiter.new(
           node_id, char, count,
           (flags & 0b10) != 0,
           (flags & 0b01) != 0,
         )
-      end
-
-      def process_emphasis(stack)
-        # NB: the CommonMark spec describes an `openers_bottom`
-        # optimization keyed by closer character / length / flanking
-        # flags. Implementing that correctly is subtle (a single
-        # per-character bottom blocks valid matches like
-        # `*foo**bar**baz*`), so the implementation here just walks
-        # back to the start of the stack for every closer. This is
-        # O(stack^2) in the worst case but stacks are tiny in practice.
-        closer_idx = 0
-
-        while closer_idx < stack.length
-          closer = stack[closer_idx]
-          unless closer.can_close
-            closer_idx += 1
-            next
-          end
-
-          opener_idx = closer_idx - 1
-          found = false
-          while opener_idx >= 0
-            opener = stack[opener_idx]
-            if opener.can_open && opener.char == closer.char
-              skip = false
-              if (opener.can_close || closer.can_open) &&
-                 ((opener.count + closer.count) % 3).zero? &&
-                 !((opener.count % 3).zero? && (closer.count % 3).zero?)
-                skip = true
-              end
-              unless skip
-                found = true
-                break
-              end
-            end
-            opener_idx -= 1
-          end
-
-          unless found
-            unless closer.can_open
-              @provisional_nodes.delete(closer.node_id)
-              stack.delete_at(closer_idx)
-            end
-            closer_idx += 1
-            next
-          end
-
-          opener = stack[opener_idx]
-          strength = [opener.count, closer.count].min >= 2 ? 2 : 1
-          if closer.char == "~"
-            # GFM strikethrough only forms on `~~` runs. A single `~`
-            # leaves the delimiter as text; advance the cursor so future
-            # `~~` pairs can still match.
-            if strength < 2
-              closer_idx += 1
-              next
-            end
-            kind = NodeType::STRIKETHROUGH
-          else
-            kind = strength == 2 ? NodeType::STRONG : NodeType::EMPHASIS
-          end
-
-          # CommonMark spec: any delimiters strictly between this opener and
-          # closer can't open or close anything in this scope, so drop them
-          # from the stack before we rebuild the tree. Their arena nodes
-          # stay where they are (they'll be reparented into the new emphasis
-          # alongside the surrounding content), but they must no longer be
-          # candidates for future iterations. Without this, the next
-          # iteration would try to pair stranded delimiters that have
-          # already been moved into a different parent, which corrupts the
-          # sibling chain (Arena#reparent walks into @parent[-1]).
-          if closer_idx > opener_idx + 1
-            removed = stack.slice!((opener_idx + 1)...closer_idx)
-            removed.each { |e| @provisional_nodes.delete(e.node_id) }
-            closer_idx = opener_idx + 1
-            closer = stack[closer_idx]
-          end
-
-          opener_node = opener.node_id
-          closer_node = closer.node_id
-
-          if @track_source
-            opener_match_start = @arena.source_end(opener_node) - strength
-            closer_match_end = @arena.source_start(closer_node) + strength
-          else
-            opener_match_start = -1
-            closer_match_end = 0
-          end
-          emphasis_id = add_arena_node(kind, opener_match_start, closer_match_end)
-
-          first_inside = @arena.raw_next_sibling_id(opener_node)
-          last_inside = @arena.raw_prev_sibling_id(closer_node)
-          if first_inside != -1 && last_inside != -1 &&
-             first_inside != closer_node && last_inside != opener_node
-            @arena.reparent(emphasis_id, first_inside, last_inside)
-          end
-
-          parent_id = @arena.raw_parent_id(opener_node)
-          @arena.insert_before(parent_id, closer_node, emphasis_id)
-
-          if opener.count == strength
-            @provisional_nodes.delete(opener_node)
-            @arena.detach(opener_node)
-            stack.delete_at(opener_idx)
-            closer_idx -= 1
-          else
-            opener.count -= strength
-            str = @arena.str1(opener_node)
-            @arena.update_str1(opener_node, str[0...-strength])
-            if @track_source
-              new_end = @arena.source_end(opener_node) - strength
-              @arena.update_span(opener_node, @arena.source_start(opener_node), new_end)
-            end
-          end
-
-          if closer.count == strength
-            @provisional_nodes.delete(closer_node)
-            @arena.detach(closer_node)
-            stack.delete_at(closer_idx)
-          else
-            closer.count -= strength
-            str = @arena.str1(closer_node)
-            @arena.update_str1(closer_node, str[strength..])
-            if @track_source
-              new_start = @arena.source_start(closer_node) + strength
-              new_end = @arena.source_end(closer_node)
-              @arena.update_span(closer_node, new_start, new_end)
-            end
-          end
-        end
-
-        stack.each { |e| @provisional_nodes.delete(e.node_id) }
-        stack.clear
       end
     end
   end
