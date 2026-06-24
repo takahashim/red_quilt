@@ -58,7 +58,7 @@ module RedQuilt
           render_children(node_id)
           @out << "</p>\n"
         when NodeType::HEADING
-          level = @arena.int1(node_id)
+          level = @arena.heading_level(node_id)
           if @slugger
             id = @slugger.generate(PlainText.from(@arena, node_id))
             @out << %(<h#{level} id="#{escape_html(id)}">)
@@ -74,9 +74,9 @@ module RedQuilt
           render_children(node_id)
           @out << "</blockquote>\n"
         when NodeType::LIST
-          ordered = @arena.int1(node_id) == 1
+          ordered = @arena.list_ordered?(node_id)
           tag = ordered ? "ol" : "ul"
-          start_number = @arena.int2(node_id)
+          start_number = @arena.list_start(node_id)
           attrs = ordered && start_number != 1 ? %( start="#{start_number}") : ""
           @out << "<#{tag}#{attrs}>\n"
           render_children(node_id)
@@ -86,7 +86,7 @@ module RedQuilt
           render_list_item(node_id)
           @out << "</li>\n"
         when NodeType::CODE_BLOCK
-          info_word = @arena.str2(node_id).to_s.split.first.to_s
+          info_word = @arena.code_block_info(node_id).to_s.split.first.to_s
           if @mermaid && info_word == "mermaid"
             # Emit a container mermaid.js recognizes via class="mermaid".
             # The diagram source is still HTML-escaped; the browser decodes
@@ -128,7 +128,7 @@ module RedQuilt
         when NodeType::CODE_SPAN
           @out << "<code>#{escape_html(@arena.text(node_id).to_s)}</code>"
         when NodeType::LINK
-          dest = escape_html(@arena.str1(node_id).to_s)
+          dest = escape_html(@arena.link_destination(node_id).to_s)
           @out << %(<a href="#{dest}")
           append_title_attribute(node_id)
           @out << ">"
@@ -136,7 +136,7 @@ module RedQuilt
           @out << "</a>"
         when NodeType::IMAGE
           alt = PlainText.from(@arena, node_id)
-          dest = escape_html(@arena.str1(node_id).to_s)
+          dest = escape_html(@arena.link_destination(node_id).to_s)
           @out << %(<img src="#{dest}" alt="#{escape_html(alt)}")
           append_title_attribute(node_id)
           @out << " />"
@@ -153,10 +153,11 @@ module RedQuilt
       # element ids use the footnote number; a second+ reference to the
       # same footnote gets a `-M` suffix so each backref has a unique target.
       def render_footnote_reference(node_id)
-        number = @arena.int1(node_id)
-        occurrence = @arena.int2(node_id)
-        ref_id = occurrence > 1 ? "fnref-#{number}-#{occurrence}" : "fnref-#{number}"
-        @out << %(<sup><a href="#fn-#{number}" id="#{ref_id}">#{number}</a></sup>)
+        number = @arena.footnote_number(node_id)
+        occurrence = @arena.footnote_occurrence(node_id)
+        ref_id = FootnoteAnchors.reference_id(number, occurrence)
+        def_id = FootnoteAnchors.definition_id(number)
+        @out << %(<sup><a href="##{def_id}" id="#{ref_id}">#{number}</a></sup>)
       end
 
       def render_footnotes_section(node_id)
@@ -166,10 +167,9 @@ module RedQuilt
       end
 
       def render_footnote_definition(def_id)
-        label = @arena.str1(def_id).to_s
-        number = @document.footnotes.number(label)
-        occurrences = @document.footnotes.occurrences(label)
-        @out << %(<li id="fn-#{number}">\n)
+        number = @arena.footnote_number(def_id)
+        occurrences = @arena.footnote_total_references(def_id)
+        @out << %(<li id="#{FootnoteAnchors.definition_id(number)}">\n)
 
         # Append the backref(s) inside the definition's last paragraph (GFM);
         # if the last block isn't a paragraph, emit a standalone one.
@@ -196,7 +196,7 @@ module RedQuilt
       def footnote_backrefs(number, occurrences)
         out = +""
         (1..occurrences).each do |occ|
-          ref_id = occ > 1 ? "fnref-#{number}-#{occ}" : "fnref-#{number}"
+          ref_id = FootnoteAnchors.reference_id(number, occ)
           suffix = occ > 1 ? "<sup>#{occ}</sup>" : ""
           out << %( <a href="##{ref_id}">&#8617;#{suffix}</a>)
         end
@@ -205,8 +205,8 @@ module RedQuilt
 
       def render_table(table_id)
         rows = @arena.child_ids(table_id).to_a
-        header_rows = rows.select { |row_id| @arena.int1(row_id) == 1 }
-        body_rows = rows.reject { |row_id| @arena.int1(row_id) == 1 }
+        header_rows = rows.select { |row_id| @arena.table_row_header?(row_id) }
+        body_rows = rows.reject { |row_id| @arena.table_row_header?(row_id) }
 
         unless header_rows.empty?
           @out << "<thead>\n"
@@ -222,7 +222,7 @@ module RedQuilt
 
       def render_list_item(node_id)
         parent_id = @arena.raw_parent_id(node_id)
-        tight = parent_id != -1 && @arena.type(parent_id) == NodeType::LIST && @arena.int3(parent_id) == 1
+        tight = parent_id != -1 && @arena.type(parent_id) == NodeType::LIST && @arena.list_tight?(parent_id)
 
         first_child_id = @arena.raw_first_child_id(node_id)
         first_is_para = first_child_id != -1 &&
@@ -261,7 +261,7 @@ module RedQuilt
       def render_table_row(row_id)
         @out << "<tr>"
         @arena.each_child(row_id) do |cell_id|
-          tag = @arena.int1(cell_id) == 1 ? "th" : "td"
+          tag = @arena.table_cell_header?(cell_id) ? "th" : "td"
           @out << "<#{tag}>"
           render_children(cell_id)
           @out << "</#{tag}>"
@@ -297,7 +297,7 @@ module RedQuilt
       end
 
       def append_title_attribute(node_id)
-        title = @arena.str2(node_id).to_s
+        title = @arena.link_title(node_id).to_s
         return if title.empty?
 
         @out << %( title="#{escape_html(title)}")

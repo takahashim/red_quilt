@@ -57,19 +57,19 @@ module RedQuilt
 
         case type_int
         when NodeType::HEADING
-          result["depth"] = @arena.int1(node_id)
+          result["depth"] = @arena.heading_level(node_id)
           result["children"] = children(node_id)
         when NodeType::LIST
-          result["ordered"] = @arena.int1(node_id) == 1
-          tight = @arena.int3(node_id) == 1
-          result["start"] = @arena.int2(node_id) if result["ordered"]
+          result["ordered"] = @arena.list_ordered?(node_id)
+          tight = @arena.list_tight?(node_id)
+          result["start"] = @arena.list_start(node_id) if result["ordered"]
           result["spread"] = !tight
           result["children"] = children(node_id, parent_spread: !tight)
         when NodeType::LIST_ITEM
           result["spread"] = parent_spread
           result["children"] = children(node_id)
         when NodeType::CODE_BLOCK
-          info = @arena.str2(node_id)
+          info = @arena.code_block_info(node_id)
           lang = info && !info.empty? ? info.split.first : nil
           result["lang"] = lang
           result["value"] = @arena.text(node_id).to_s
@@ -81,21 +81,21 @@ module RedQuilt
         when NodeType::CODE_SPAN
           result["value"] = @arena.text(node_id).to_s
         when NodeType::LINK
-          result["url"] = @arena.str1(node_id).to_s
-          title = @arena.str2(node_id)
+          result["url"] = @arena.link_destination(node_id).to_s
+          title = @arena.link_title(node_id)
           result["title"] = title && !title.empty? ? title : nil
           result["children"] = children(node_id)
         when NodeType::IMAGE
-          result["url"] = @arena.str1(node_id).to_s
-          title = @arena.str2(node_id)
+          result["url"] = @arena.link_destination(node_id).to_s
+          title = @arena.link_title(node_id)
           result["title"] = title && !title.empty? ? title : nil
           result["alt"] = NodeRef.new(@document, node_id).text.to_s
         when NodeType::FOOTNOTE_REFERENCE
-          label = @arena.str1(node_id).to_s
+          label = @arena.footnote_label(node_id).to_s
           result["identifier"] = label
           result["label"] = label
         when NodeType::FOOTNOTE_DEFINITION
-          label = @arena.str1(node_id).to_s
+          label = @arena.footnote_label(node_id).to_s
           result["identifier"] = label
           result["label"] = label
           result["children"] = children(node_id)

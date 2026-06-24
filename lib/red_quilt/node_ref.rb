@@ -50,7 +50,7 @@ module RedQuilt
     def info
       return "" unless @arena.type(@node_id) == NodeType::CODE_BLOCK
 
-      @arena.str2(@node_id).to_s
+      @arena.code_block_info(@node_id).to_s
     end
 
     def source_span
@@ -93,26 +93,28 @@ module RedQuilt
     def ast_attributes
       case @arena.type(@node_id)
       when NodeType::HEADING
-        { level: @arena.int1(@node_id), text: text }
+        { level: @arena.heading_level(@node_id), text: text }
       when NodeType::LIST
         {
-          ordered: @arena.int1(@node_id) == 1,
-          start_number: @arena.int2(@node_id),
-          tight: @arena.int3(@node_id) == 1,
-          delimiter: @arena.str1(@node_id),
+          ordered: @arena.list_ordered?(@node_id),
+          start_number: @arena.list_start(@node_id),
+          tight: @arena.list_tight?(@node_id),
+          delimiter: @arena.list_delimiter(@node_id),
         }
-      when NodeType::TABLE_ROW, NodeType::TABLE_CELL
-        { header: @arena.int1(@node_id) == 1, text: text }
+      when NodeType::TABLE_ROW
+        { header: @arena.table_row_header?(@node_id), text: text }
+      when NodeType::TABLE_CELL
+        { header: @arena.table_cell_header?(@node_id), text: text }
       when NodeType::TEXT, NodeType::CODE_SPAN, NodeType::HTML_BLOCK, NodeType::HTML_INLINE, NodeType::PARAGRAPH
         { text: text }
       when NodeType::CODE_BLOCK
-        { text: @arena.text(@node_id), info: @arena.str2(@node_id) }
+        { text: @arena.text(@node_id), info: @arena.code_block_info(@node_id) }
       when NodeType::LINK, NodeType::IMAGE
-        { destination: @arena.str1(@node_id), title: @arena.str2(@node_id), text: text }
+        { destination: @arena.link_destination(@node_id), title: @arena.link_title(@node_id), text: text }
       when NodeType::FOOTNOTE_REFERENCE
-        { label: @arena.str1(@node_id), number: @arena.int1(@node_id) }
+        { label: @arena.footnote_label(@node_id), number: @arena.footnote_number(@node_id) }
       when NodeType::FOOTNOTE_DEFINITION
-        { label: @arena.str1(@node_id) }
+        { label: @arena.footnote_label(@node_id) }
       else
         {}
       end

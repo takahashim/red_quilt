@@ -231,6 +231,102 @@ module RedQuilt
       @str2[id]
     end
 
+    # --- Semantic payload accessors -------------------------------------
+    #
+    # int1..int3 / str1 / str2 are anonymous columns; their meaning is
+    # per-NodeType (see the class comment). These readers are the single
+    # source of truth for those conventions, so callers (renderers, the
+    # NodeRef wrapper, AST/MDAST export) never need to know which raw
+    # column a field lives in. Writers use add_node's keyword args,
+    # update_*, or a small set of typed writers (e.g.
+    # #resolve_footnote_definition) when the intent is worth naming.
+    #
+    # The reader is responsible for calling these only on the matching
+    # NodeType; on a mismatching node they return whatever the raw column
+    # holds (typically the 0 / nil default).
+
+    # HEADING: nesting level (1..6).
+    def heading_level(id)
+      @int1[id]
+    end
+
+    # LIST: ordered (`1.`) vs bullet (`-`).
+    def list_ordered?(id)
+      @int1[id] == 1
+    end
+
+    # LIST: the start number of an ordered list (1 unless overridden).
+    def list_start(id)
+      @int2[id]
+    end
+
+    # LIST: tight (no blank lines between items) vs loose.
+    def list_tight?(id)
+      @int3[id] == 1
+    end
+
+    # LIST: the item delimiter as authored (e.g. "-", "1.").
+    def list_delimiter(id)
+      @str1[id]
+    end
+
+    # TABLE_ROW: header row (rendered in <thead>) vs body row.
+    def table_row_header?(id)
+      @int1[id] == 1
+    end
+
+    # TABLE_CELL: header cell (<th>) vs data cell (<td>).
+    def table_cell_header?(id)
+      @int1[id] == 1
+    end
+
+    # CODE_BLOCK: the fence info string (e.g. 'ruby', 'vtt audio="x"').
+    def code_block_info(id)
+      @str2[id]
+    end
+
+    # LINK / IMAGE: destination URL.
+    def link_destination(id)
+      @str1[id]
+    end
+
+    # LINK / IMAGE: optional title attribute (nil/empty when absent).
+    def link_title(id)
+      @str2[id]
+    end
+
+    # FOOTNOTE_REFERENCE: the assigned footnote number.
+    def footnote_number(id)
+      @int1[id]
+    end
+
+    # FOOTNOTE_REFERENCE: which occurrence of a repeated reference this is
+    # (1-based), used to give each backref a unique anchor.
+    def footnote_occurrence(id)
+      @int2[id]
+    end
+
+    # FOOTNOTE_REFERENCE / FOOTNOTE_DEFINITION: the author-written label.
+    def footnote_label(id)
+      @str1[id]
+    end
+
+    # FOOTNOTE_DEFINITION: total number of references to this footnote,
+    # materialized by FootnotePass so renderers can read it off the node
+    # instead of consulting the registry. (FOOTNOTE_REFERENCE reuses int2
+    # for its own occurrence index; see #footnote_occurrence.)
+    def footnote_total_references(id)
+      @int2[id]
+    end
+
+    # FOOTNOTE_DEFINITION: records the resolved number and total reference
+    # count onto the node (read back via #footnote_number /
+    # #footnote_total_references).
+    def resolve_footnote_definition(id, number, total_references)
+      @int1[id] = number
+      @int2[id] = total_references
+    end
+
     # Returns a SourceSpan for the node, or nil when the node has no
     # span (source_start < 0, meaning the content is held in str1).
     def source_span(id)

@@ -116,6 +116,23 @@ module RedQuilt
     def source_span: (Integer id) -> SourceSpan?
     def text: (Integer id) -> String?
 
+    # Semantic payload accessors (per-NodeType column conventions)
+    def heading_level: (Integer id) -> Integer
+    def list_ordered?: (Integer id) -> bool
+    def list_start: (Integer id) -> Integer
+    def list_tight?: (Integer id) -> bool
+    def list_delimiter: (Integer id) -> String?
+    def table_row_header?: (Integer id) -> bool
+    def table_cell_header?: (Integer id) -> bool
+    def code_block_info: (Integer id) -> String?
+    def link_destination: (Integer id) -> String?
+    def link_title: (Integer id) -> String?
+    def footnote_number: (Integer id) -> Integer
+    def footnote_occurrence: (Integer id) -> Integer
+    def footnote_label: (Integer id) -> String?
+    def footnote_total_references: (Integer id) -> Integer
+    def resolve_footnote_definition: (Integer id, Integer number, Integer total_references) -> void
+
     # Traversal
     def each_child: (Integer id) { (Integer child_id) -> void } -> self
     def child_ids: (Integer id) -> Enumerator[Integer, void]

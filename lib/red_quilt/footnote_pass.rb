@@ -29,10 +29,14 @@ module RedQuilt
 
       # Re-append referenced definitions in first-reference order; detaching
       # all current children first means unreferenced definitions are left
-      # orphaned (and so never rendered).
+      # orphaned (and so never rendered). The number and reference count are
+      # materialized onto each definition node so the renderer reads them off
+      # the arena rather than consulting the registry.
       @arena.child_ids(section_id).to_a.each { |child| @arena.detach(child) }
       @registry.referenced_labels.each do |label|
-        @arena.append_child(section_id, @registry.definition_node(label))
+        def_id = @registry.definition_node(label)
+        @arena.resolve_footnote_definition(def_id, @registry.number(label), @registry.occurrences(label))
+        @arena.append_child(section_id, def_id)
       end
     end
   end

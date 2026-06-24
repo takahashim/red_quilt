@@ -22,7 +22,7 @@ module RedQuilt
       walk(@document.root_id) do |id|
         case @arena.type(id)
         when NodeType::HEADING
-          level = @arena.int1(id)
+          level = @arena.heading_level(id)
           if last_heading_level.positive? && level > last_heading_level + 1
             push(:info, :heading_level_skip,
                  "Heading jumps from h#{last_heading_level} to h#{level}",
@@ -45,7 +45,7 @@ module RedQuilt
     end
 
     def check_empty_link(node_id)
-      return unless @arena.str1(node_id).to_s.empty?
+      return unless @arena.link_destination(node_id).to_s.empty?
 
       push(:warning, :empty_link,
            "Link has no destination",
