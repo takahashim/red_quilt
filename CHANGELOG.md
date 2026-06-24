@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `NodeRef#info`: returns the fence info string of a code block (e.g. `ruby`
+  in ` ```ruby `, or `vtt audio="x.mp3"`); `""` for code blocks without one
+  and for every other node type. The raw code content remains available via
+  `NodeRef#text`.
+- `Renderer::HTML#render_fragment(nodes)`: renders an Array of `NodeRef` in
+  order and returns the HTML fragment without affecting the main render
+  output. Renderer state shared across nodes (e.g. the heading-id slugger) is
+  preserved between calls. Lets callers that partition a document render the
+  pieces separately without reaching into renderer internals.
+
 ## [0.7.2] - 2026-06-23
 
 ### Added

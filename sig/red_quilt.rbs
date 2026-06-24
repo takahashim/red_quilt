@@ -61,6 +61,7 @@ module RedQuilt
     def walk: () { (NodeRef) -> void } -> void
             | () -> Enumerator[NodeRef, void]
     def text: () -> String?
+    def info: () -> String
     def source_span: () -> SourceSpan?
     def find_all: (Symbol type) -> Array[NodeRef]
     def source_location: () -> { start_line: Integer, start_column: Integer, end_line: Integer, end_column: Integer }?

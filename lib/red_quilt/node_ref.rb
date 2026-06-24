@@ -46,6 +46,13 @@ module RedQuilt
       text
     end
 
+    # Returns the fence info string of a CODE_BLOCK node.
+    def info
+      return "" unless @arena.type(@node_id) == NodeType::CODE_BLOCK
+
+      @arena.str2(@node_id).to_s
+    end
+
     def source_span
       @arena.source_span(@node_id)
     end

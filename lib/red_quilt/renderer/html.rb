@@ -16,6 +16,18 @@ module RedQuilt
         @out
       end
 
+      # Renders the given nodes (an Array of NodeRef) in order and returns
+      # the resulting HTML fragment, without affecting the main render
+      # output.
+      def render_fragment(nodes)
+        saved = @out
+        @out = +""
+        nodes.each { |node| render_node(node.node_id) }
+        @out
+      ensure
+        @out = saved
+      end
+
       private
 
       # CommonMark-compliant HTML escape: only `&`, `<`, `>`, `"` are

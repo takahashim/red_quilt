@@ -50,6 +50,7 @@ node.children         # Array[NodeRef]
 node.walk             # Enumerator[NodeRef] or { |node| ... } block
 node.find_all(:link)  # Array[NodeRef] with matching type
 node.text             # String (concatenated child text)
+node.info             # String fence info of a code block (e.g. "ruby")
 
 # Position information (byte offset)
 node.source_span      # SourceSpan with start_byte, end_byte
