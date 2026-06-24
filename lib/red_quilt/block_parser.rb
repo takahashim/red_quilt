@@ -14,6 +14,9 @@ module RedQuilt
       @list_parser = List::Parser.new(self)
       @blockquote_parser = Blockquote::Parser.new(self)
       @footnote_parser = FootnoteDefinition::Parser.new(self)
+      @code_block_parser = CodeBlock::Parser.new(self)
+      @html_block_parser = HtmlBlock::Parser.new(self)
+      @table_parser = Table::Parser.new(self)
     end
 
     attr_reader :references, :arena, :diagnostics
@@ -60,29 +63,29 @@ module RedQuilt
           next
         end
 
-        if (fence = fenced_code_start(content))
-          index = parse_fenced_code(parent_id, lines, index, fence)
+        if (fence = CodeBlock.fenced_start(content))
+          index = @code_block_parser.parse_fenced(parent_id, lines, index, fence)
         elsif (heading = atx_heading(content))
           append_heading(parent_id, line, heading, transformed)
           index += 1
         elsif thematic_break?(content)
-          @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: span_len(line)))
+          @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: line.span_len))
           index += 1
         elsif @footnotes && (footnote = FootnoteDefinition.match(content))
           index = @footnote_parser.parse(lines, index, footnote, @footnotes, @root_id)
         elsif (reference = ReferenceDefinition.consume(lines, index))
           store_reference(reference[:reference], reference[:source_span])
           index += reference[:consumed]
-        elsif table_start?(lines, index)
-          index = parse_table(parent_id, lines, index)
-        elsif html_block_start?(content)
-          index = parse_html_block(parent_id, lines, index)
+        elsif Table.start?(lines, index)
+          index = @table_parser.parse(parent_id, lines, index)
+        elsif HtmlBlock.start?(content)
+          index = @html_block_parser.parse(parent_id, lines, index)
         elsif Blockquote.match?(content)
           index = @blockquote_parser.parse(parent_id, lines, index)
         elsif List.match(content)
           index = @list_parser.parse(parent_id, lines, index)
-        elsif indented_code_line?(content)
-          index = parse_indented_code(parent_id, lines, index)
+        elsif CodeBlock.indented_line?(content)
+          index = @code_block_parser.parse_indented(parent_id, lines, index)
         else
           index = parse_paragraph(parent_id, lines, index, transformed)
         end
@@ -101,16 +104,16 @@ module RedQuilt
       line = lines[index]
       return true if atx_heading(line.content)
       return true if thematic_break?(line.content)
-      return true if fenced_code_start(line.content)
+      return true if CodeBlock.fenced_start(line.content)
       # HTML type 7 doesn't break lazy continuation either.
-      if (type = html_block_type(line.content)) && type != 7
+      if (type = HtmlBlock.type(line.content)) && type != 7
         return true
       end
       return true if Blockquote.match?(line.content)
       if (li = List.match(line.content)) && List.interrupts_paragraph?(li)
         return true
       end
-      return true if table_start?(lines, index)
+      return true if Table.start?(lines, index)
 
       false
     end
@@ -128,11 +131,11 @@ module RedQuilt
     end
 
     def paragraph_eligible_line?(content)
-      return false if indented_code_line?(content)
-      return false if fenced_code_start(content)
+      return false if CodeBlock.indented_line?(content)
+      return false if CodeBlock.fenced_start(content)
       return false if atx_heading(content)
       return false if thematic_break?(content)
-      return false if html_block_start?(content)
+      return false if HtmlBlock.start?(content)
       return false if List.match(content)
       return false if Blockquote.match?(content)
 
@@ -181,173 +184,6 @@ module RedQuilt
       return false if content.include?("|")
 
       true
-    end
-
-    def parse_fenced_code(parent_id, lines, index, fence)
-      start_line = lines[index]
-      content_lines = []
-      index += 1
-      while index < lines.length
-        break if fenced_code_close?(lines[index].content, fence[:char], fence[:count])
-
-        content_lines << lines[index]
-        index += 1
-      end
-      index += 1 if index < lines.length
-
-      # Each content line is stripped of up to the fence's own leading
-      # indent (CommonMark spec: a fence indented by N spaces strips up
-      # to N spaces from every content line, but never more). Manual
-      # byte scan beats compiling an interpolated regex per block and
-      # short-circuits when the fence had no indent (the common case).
-      indent_n = fence[:indent] || 0
-      code = content_lines.map { |l| strip_leading_spaces(l.content, indent_n) }.join("\n")
-      code << "\n" unless content_lines.empty?
-      source_start = content_lines.empty? ? start_line.start_byte : content_lines.first.start_byte
-      source_end = content_lines.empty? ? start_line.end_byte : content_lines.last.end_byte
-      code_id = @arena.add_node(NodeType::CODE_BLOCK,
-                                source_start: source_start,
-                                source_len: source_end - source_start,
-                                str1: code,
-                                str2: fence[:info])
-      @arena.append_child(parent_id, code_id)
-      index
-    end
-
-    def parse_indented_code(parent_id, lines, index)
-      start_index = index
-      code_lines = []
-      while index < lines.length
-        line = lines[index]
-        break unless line.blank || indented_code_line?(line.content)
-
-        # CommonMark: strip up to 4 columns of leading whitespace
-        # (tab-aware) from every line, including blank lines whose
-        # content beyond column 4 must be preserved verbatim.
-        code_lines << Indentation.strip_columns(line.content, 4)
-        index += 1
-      end
-
-      # Trailing blank lines are not part of the code block.
-      while !code_lines.empty? && code_lines.last.strip.empty?
-        code_lines.pop
-        index -= 1
-      end
-
-      start_byte = lines[start_index].start_byte
-      end_byte = lines[index - 1].end_byte
-      code = code_lines.empty? ? "" : code_lines.join("\n") + "\n"
-
-      code_id = @arena.add_node(NodeType::CODE_BLOCK,
-                                source_start: start_byte,
-                                source_len: end_byte - start_byte,
-                                str1: code)
-      @arena.append_child(parent_id, code_id)
-      index
-    end
-
-    HTML_BLOCK_FIXED_TERMINATORS = {
-      2 => "-->",
-      3 => "?>",
-      4 => ">",
-      5 => "]]>",
-    }.freeze
-
-    private_constant :HTML_BLOCK_FIXED_TERMINATORS
-
-    def parse_html_block(parent_id, lines, index)
-      start_index = index
-      type = html_block_type(lines[index].content)
-      end_index = locate_html_block_end(lines, index, type)
-
-      start_byte = lines[start_index].start_byte
-      end_byte = lines[end_index].end_byte
-      html_lines = (start_index..end_index).map { |i| lines[i].content }
-      html_id = @arena.add_node(NodeType::HTML_BLOCK,
-                                source_start: start_byte,
-                                source_len: end_byte - start_byte,
-                                str1: html_lines.join("\n"))
-      @arena.append_child(parent_id, html_id)
-      end_index + 1
-    end
-
-    def locate_html_block_end(lines, index, type)
-      terminator = html_block_terminator(type, lines[index].content)
-
-      if terminator
-        case_insensitive = (type == 1)
-        while index < lines.length
-          line = lines[index].content
-          haystack = case_insensitive ? line.downcase : line
-          return index if haystack.include?(terminator)
-
-          index += 1
-        end
-        lines.length - 1
-      else
-        # Types 6 & 7: terminated by blank line (or end of input)
-        index += 1 while index < lines.length && !lines[index].blank
-        index - 1
-      end
-    end
-
-    def html_block_terminator(type, first_line)
-      case type
-      when 1
-        "</#{extract_closing_tag_name(first_line)}>"
-      when 2..5
-        HTML_BLOCK_FIXED_TERMINATORS[type]
-      end
-    end
-
-    def extract_closing_tag_name(text)
-      match = /\A<(script|pre|style|textarea)/i.match(text)
-      match ? match[1].downcase : "script"
-    end
-
-    def parse_table(parent_id, lines, index)
-      # Caller must have verified table_start?(lines, index), which validates
-      # both the delimiter pattern and the header/separator column count match.
-      start_index = index
-      header_cells = split_table_row(lines[index].content)
-      row_lines = [lines[index]]
-      index += 2
-      while index < lines.length
-        break if lines[index].blank
-        break unless table_row?(lines[index].content)
-
-        row_lines << lines[index]
-        index += 1
-      end
-
-      table_id = @arena.add_node(NodeType::TABLE,
-                                 source_start: lines[start_index].start_byte,
-                                 source_len: row_lines.last.end_byte - lines[start_index].start_byte)
-      @arena.append_child(parent_id, table_id)
-
-      append_table_row(table_id, lines[start_index], header_cells, true)
-      row_lines.drop(1).each do |row_line|
-        append_table_row(table_id, row_line, split_table_row(row_line.content), false)
-      end
-
-      index
-    end
-
-    def append_table_row(table_id, line, cells, header)
-      row_id = @arena.add_node(NodeType::TABLE_ROW,
-                               source_start: line.start_byte,
-                               source_len: span_len(line),
-                               int1: header ? 1 : 0)
-      @arena.append_child(table_id, row_id)
-      cells.each do |cell_text|
-        stripped = cell_text.strip
-        cell_id = @arena.add_node(NodeType::TABLE_CELL,
-                                  source_start: line.start_byte,
-                                  source_len: span_len(line),
-                                  int1: header ? 1 : 0,
-                                  str1: stripped)
-        @arena.append_child(row_id, cell_id)
-      end
     end
 
     def append_heading(parent_id, line, heading, transformed)
@@ -403,7 +239,7 @@ module RedQuilt
       # reaches this branch). Continuation lines have no fixed indent
       # cap — all leading whitespace is stripped before joining.
       stripped = paragraph_lines.map.with_index do |l, i|
-        i.zero? ? strip_leading_spaces(l.content, 3) : strip_leading_whitespace(l.content)
+        i.zero? ? Indentation.strip_leading_spaces(l.content, 3) : Indentation.strip_leading_whitespace(l.content)
       end
       # Trailing whitespace on the last line is dropped (no hard-break
       # without a following content line).
@@ -454,52 +290,19 @@ module RedQuilt
       return false unless index > 0
       return true if atx_heading(line.content)
       return true if thematic_break?(line.content)
-      return true if fenced_code_start(line.content)
+      return true if CodeBlock.fenced_start(line.content)
       # CommonMark: HTML block types 1–6 interrupt paragraphs; type 7
       # (a bare valid tag on its own line) does not.
-      if (type = html_block_type(line.content)) && type != 7
+      if (type = HtmlBlock.type(line.content)) && type != 7
         return true
       end
       return true if Blockquote.match?(line.content)
       if (li = List.match(line.content)) && List.interrupts_paragraph?(li)
         return true
       end
-      return true if table_start?(lines, index)
+      return true if Table.start?(lines, index)
 
       false
-    end
-
-    # Strips up to `max` leading 0x20 bytes from `text`. Returns the
-    # original string when nothing changed, so callers avoid an
-    # allocation in the common no-indent case.
-    def strip_leading_spaces(text, max)
-      return text if max <= 0
-
-      bytes = text.bytesize
-      i = 0
-      while i < max && i < bytes && text.getbyte(i) == 0x20
-        i += 1
-      end
-      return text if i.zero?
-
-      text.byteslice(i..)
-    end
-
-    # Strips all leading 0x20 / 0x09 bytes from `text`. Same no-alloc
-    # return as `strip_leading_spaces` when the string already starts
-    # at a non-whitespace byte.
-    def strip_leading_whitespace(text)
-      bytes = text.bytesize
-      i = 0
-      while i < bytes
-        b = text.getbyte(i)
-        break unless b == 0x20 || b == 0x09
-
-        i += 1
-      end
-      return text if i.zero?
-
-      text.byteslice(i..)
     end
 
     def build_lines(source)
@@ -540,167 +343,6 @@ module RedQuilt
       { level: match[1].length, content: content, content_start: content_index }
     end
 
-    def fenced_code_start(text)
-      match = /\A( {0,3})(`{3,}|~{3,})[ \t]*(.*?)\s*\z/.match(text)
-      return unless match
-
-      info = match[3]
-      # CommonMark: a backtick-style fence cannot have backticks in its
-      # info string (they'd be ambiguous with the fence itself).
-      return if match[2].start_with?("`") && info.include?("`")
-
-      {
-        char: match[2][0],
-        count: match[2].length,
-        info: ReferenceDefinition.unescape_text(info),
-        indent: match[1].length,
-      }
-    end
-
-    def fenced_code_close?(text, char, count)
-      # Manual byte scan beats compiling a per-(char,count) regex on
-      # every line of a fenced block. Pattern: 0-3 spaces, >=count of
-      # `char`, optional trailing spaces/tabs, end-of-line.
-      bytes = text.bytesize
-      i = 0
-      # CommonMark spec: at most 3 spaces of indent.
-      while i < 3 && i < bytes && text.getbyte(i) == 0x20
-        i += 1
-      end
-      char_byte = char.getbyte(0)
-      fence_start = i
-      while i < bytes && text.getbyte(i) == char_byte
-        i += 1
-      end
-      return false if i - fence_start < count
-
-      while i < bytes
-        b = text.getbyte(i)
-        return false unless b == 0x20 || b == 0x09
-
-        i += 1
-      end
-      true
-    end
-
-    def indented_code_line?(text)
-      # CommonMark: 4+ columns of leading whitespace, where tabs expand
-      # virtually to a tab stop of 4 columns.
-      Indentation.leading_columns(text) >= 4
-    end
-
-    # Returns the column count of leading whitespace, treating tabs as
-    # advancing to the next multiple-of-4 column.
-    def html_block_start?(text)
-      # Indented code block takes precedence (4+ spaces)
-      return false if text.start_with?("    ")
-
-      !html_block_type(text).nil?
-    end
-
-    def html_block_type(text)
-      # Fast reject: every HTML block starts with `<`. lstrip strips
-      # 0-3 indent spaces (more would already be indented code), so peek
-      # the leading non-space byte before doing any allocations.
-      i = 0
-      # CommonMark: HTML block lines may have 0-3 spaces of indent.
-      while i < 3 && i < text.length && text.getbyte(i) == 0x20
-        i += 1
-      end
-      return nil unless i < text.length && text.getbyte(i) == 0x3C
-
-      stripped = i.zero? ? text : text[i..]
-
-      # Type 1: <script|pre|style|textarea (case-insensitive) followed by
-      # space/tab/end-of-line or `>`. CommonMark restricts the separator
-      # to space, tab, or a line ending (not any whitespace class).
-      return 1 if stripped.match?(%r{\A<(script|pre|style|textarea)(?:[ \t]|>|$)}i)
-
-      # Type 2: <!--
-      return 2 if stripped.start_with?("<!--")
-
-      # Type 3: <?
-      return 3 if stripped.start_with?("<?")
-
-      # Type 4: <! followed by uppercase ASCII letter
-      return 4 if stripped.match?(%r{\A<![A-Z]})
-
-      # Type 5: <![CDATA[
-      return 5 if stripped.start_with?("<![CDATA[")
-
-      # Type 6: line opens with one of the listed block-level tags.
-      return 6 if stripped.match?(HTML_BLOCK_TYPE_6_RE)
-
-      # Type 7: a complete open or closing tag spanning the line.
-      return 7 if valid_html_tag?(stripped)
-
-      nil
-    end
-
-    HTML_BLOCK_TYPE_6_NAMES = %w[
-      address article aside base basefont blockquote body caption center
-      col colgroup dd details dialog dir div dl dt fieldset figcaption
-      figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header
-      hr html iframe legend li link main menu menuitem nav noframes ol
-      optgroup option p param search section summary table tbody td
-      tfoot th thead title tr track ul
-    ].freeze
-    HTML_BLOCK_TYPE_6_RE =
-      %r{\A</?(?:#{HTML_BLOCK_TYPE_6_NAMES.join('|')})(?:[ \t]|>|/>|\z)}i
-
-    private_constant :HTML_BLOCK_TYPE_6_NAMES, :HTML_BLOCK_TYPE_6_RE
-
-    def table_start?(lines, index)
-      return false if index + 1 >= lines.length
-      return false unless table_row?(lines[index].content)
-
-      header_cells = split_table_row(lines[index].content)
-      separators = split_table_row(lines[index + 1].content)
-      return false if separators.empty?
-
-      # GFM spec: separator row must have valid delimiters AND match header column count.
-      # "The header row must match the delimiter row in the number of cells.
-      #  If not, a table will not be recognized."
-      return false unless header_cells.length == separators.length
-
-      separators.all? { |cell| cell.strip.match?(/\A:?-+:?\z/) }
-    end
-
-    def table_row?(text)
-      text.include?("|")
-    end
-
-    def split_table_row(text)
-      body = text.strip
-      body = body[1..] if body.start_with?("|")
-      body = body[0...-1] if body.end_with?("|")
-      body.split("|", -1)
-    end
-
-    # Type 7: a complete open or closing tag on its own line.
-    # Closing tags must not have attributes.
-    #
-    # HTML tag separators per CommonMark 6.6 are space, tab, or up to one
-    # line ending -- not the broader \s class (which would include form
-    # feed and vertical tab).
-    HTML_TYPE_7_OPEN_TAG_RE = %r{
-      \A
-      <[A-Za-z][A-Za-z0-9-]*
-      (?:[ \t\r\n]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t\r\n]*=[ \t\r\n]*(?:"[^"\n]*"|'[^'\n]*'|[^ \t\r\n"'=<>`]+))?)*
-      [ \t\r\n]*/?>
-      \z
-    }x
-    HTML_TYPE_7_CLOSING_TAG_RE = %r{\A</[A-Za-z][A-Za-z0-9-]*[ \t\r\n]*>\z}
-
-    private_constant :HTML_TYPE_7_OPEN_TAG_RE, :HTML_TYPE_7_CLOSING_TAG_RE
-
-    def valid_html_tag?(text)
-      # Fast reject: every type-7 tag must begin with `<`.
-      return false unless text.start_with?("<")
-
-      HTML_TYPE_7_OPEN_TAG_RE.match?(text) || HTML_TYPE_7_CLOSING_TAG_RE.match?(text)
-    end
-
     def store_reference(reference, source_span)
       if @references.key?(reference[:label])
         @diagnostics << Diagnostic.new(
@@ -715,10 +357,6 @@ module RedQuilt
         destination: reference[:destination],
         title: reference[:title],
       }
-    end
-
-    def span_len(line)
-      line.end_byte - line.start_byte
     end
   end
 end

@@ -10,5 +10,10 @@ module RedQuilt
   # Positional (not keyword_init): one Line is built per source line, so
   # the ~2.5x faster positional constructor matters on large documents.
   # Argument order: content, start_byte, end_byte, blank, lazy_continuation.
-  Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy_continuation)
+  Line = Struct.new(:content, :start_byte, :end_byte, :blank, :lazy_continuation) do
+    # Byte length of the line's span in the original source.
+    def span_len
+      end_byte - start_byte
+    end
+  end
 end

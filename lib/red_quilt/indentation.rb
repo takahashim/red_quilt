@@ -57,6 +57,41 @@ module RedQuilt
       end
     end
 
+    # Strips up to `max` leading 0x20 (space) bytes from `text`, returning
+    # the rest. Unlike #strip_columns this is a plain byte strip (tabs are
+    # not expanded); used where the spec counts literal spaces, e.g. a
+    # fenced code block stripping its own opening indent. No-alloc return
+    # when `text` already starts at a non-space byte.
+    def strip_leading_spaces(text, max)
+      return text if max <= 0
+
+      bytes = text.bytesize
+      i = 0
+      while i < max && i < bytes && text.getbyte(i) == 0x20
+        i += 1
+      end
+      return text if i.zero?
+
+      text.byteslice(i..)
+    end
+
+    # Strips all leading 0x20 / 0x09 bytes from `text` (spaces and tabs,
+    # no column cap). Same no-alloc return as #strip_leading_spaces when
+    # `text` already starts at a non-whitespace byte.
+    def strip_leading_whitespace(text)
+      bytes = text.bytesize
+      i = 0
+      while i < bytes
+        b = text.getbyte(i)
+        break unless b == 0x20 || b == 0x09
+
+        i += 1
+      end
+      return text if i.zero?
+
+      text.byteslice(i..)
+    end
+
     # Bytes of literal leading 0x20 / 0x09 in `text`.
     def leading_ws_bytes(text)
       i = 0
