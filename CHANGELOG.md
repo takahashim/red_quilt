@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   output. Renderer state shared across nodes (e.g. the heading-id slugger) is
   preserved between calls. Lets callers that partition a document render the
   pieces separately without reaching into renderer internals.
+- `Arena` semantic payload accessors (`heading_level`, `list_ordered?`,
+  `code_block_info`, `link_destination`, `footnote_number`, …) for callers
+  that walk `Document#arena`, replacing direct use of the raw `int1`/`str2`
+  columns.
 
 ## [0.7.2] - 2026-06-23
 
