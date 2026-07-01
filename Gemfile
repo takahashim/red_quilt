@@ -17,4 +17,5 @@ group :development do
   gem "rubocop"
   gem "stackprof", "~> 0.2"
   gem "tilt", "~> 2.0"
+  gem "irb"
 end
