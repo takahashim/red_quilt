@@ -13,9 +13,9 @@ gem "benchmark", "~> 0.4"
 gem "benchmark-ips", "~> 2.14"
 
 group :development do
+  gem "irb"
   gem "kramdown", "~> 2.4"
   gem "rubocop"
   gem "stackprof", "~> 0.2"
   gem "tilt", "~> 2.0"
-  gem "irb"
 end
