@@ -35,8 +35,7 @@ module RedQuilt
                               diagnostics: @document.diagnostics,
                               footnotes: @document.footnotes).build(node_id, @tokens)
         else
-          start_byte = @arena.source_start(node_id)
-          end_byte = @arena.source_end(node_id)
+          start_byte, end_byte = inline_range(node_id)
           @lexer.lex_into(@tokens, start_byte, end_byte)
           @builder.build(node_id, @tokens)
         end
@@ -48,6 +47,20 @@ module RedQuilt
         visit(child_id)
         child_id = @arena.raw_next_sibling_id(child_id)
       end
+    end
+
+    # The byte range to lex as inline content. For most nodes that is the
+    # source span, but an ATX heading's span covers the `#` marker and any
+    # closing hashes so that positions point at the heading as authored;
+    # lexing that range would turn the marker into text. Setext headings
+    # leave the content range zeroed and fall back to the span.
+    def inline_range(node_id)
+      if @arena.type(node_id) == NodeType::HEADING && @arena.heading_content_start(node_id).positive?
+        start_byte = @arena.heading_content_start(node_id)
+        return [start_byte, start_byte + @arena.heading_content_len(node_id)]
+      end
+
+      [@arena.source_start(node_id), @arena.source_end(node_id)]
     end
   end
 end

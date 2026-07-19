@@ -127,19 +127,23 @@ module RedQuilt
         result
       end
 
+      # unist Point: line and column are 1-based, offset is a 0-based
+      # *character* index. SourceSpan carries bytes, so offset is converted
+      # rather than passed through — the two diverge on multibyte sources.
       def position(span)
-        start_loc = @document.source_map.line_column(span.start_byte)
-        end_loc = @document.source_map.line_column(span.end_byte)
+        source_map = @document.source_map
+        start_loc = source_map.line_column(span.start_byte)
+        end_loc = source_map.line_column(span.end_byte)
         {
           "start" => {
             "line" => start_loc[:line],
             "column" => start_loc[:column],
-            "offset" => span.start_byte,
+            "offset" => source_map.char_offset(span.start_byte),
           },
           "end" => {
             "line" => end_loc[:line],
             "column" => end_loc[:column],
-            "offset" => span.end_byte,
+            "offset" => source_map.char_offset(span.end_byte),
           },
         }
       end

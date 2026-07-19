@@ -250,6 +250,20 @@ module RedQuilt
       @int1[id]
     end
 
+    # HEADING: byte range of the heading text alone, excluding the `#` marker
+    # and any closing hashes. The node's source_span covers the heading as
+    # authored (for position reporting), so inline parsing needs this narrower
+    # range to avoid lexing the marker as content. Setext headings carry no
+    # marker prefix and leave this zeroed, in which case the span is the
+    # content range.
+    def heading_content_start(id)
+      @int2[id]
+    end
+
+    def heading_content_len(id)
+      @int3[id]
+    end
+
     # LIST: ordered (`1.`) vs bullet (`-`).
     def list_ordered?(id)
       @int1[id] == 1
@@ -346,6 +360,13 @@ module RedQuilt
 
       start_byte = @source_start[id]
       return nil if start_byte.nil? || start_byte.negative?
+
+      # An ATX heading's span deliberately covers its `#` marker so that
+      # positions point at the heading as authored. Text is the content
+      # alone, so slice the narrower content range instead.
+      if @type[id] == NodeType::HEADING && @int2[id].positive?
+        return @source.byteslice(@int2[id], @int3[id])
+      end
 
       @source.byteslice(start_byte, @source_len[id])
     end

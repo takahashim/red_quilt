@@ -57,7 +57,13 @@ node.source_span      # SourceSpan with start_byte, end_byte
 
 # Position information (line/column)
 node.source_location  # { start_line, start_column, end_line, end_column }
-                      # line: 1-indexed, column: 0-indexed (character-based)
+                      # line and column are both 1-indexed and counted in
+                      # characters, following the unist Point convention that
+                      # cmark sourcepos and mdast use. `end` is exclusive: it
+                      # is the position just past the node's last character.
+                      # Block spans cover the block as authored, including
+                      # markers ("# H1" starts at the "#", "```" fences are
+                      # part of the code block), but excluding leading indent.
 
 # AST export
 node.to_h             # Export subtree as Hash[Symbol, untyped]

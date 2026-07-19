@@ -118,6 +118,8 @@ module RedQuilt
 
     # Semantic payload accessors (per-NodeType column conventions)
     def heading_level: (Integer id) -> Integer
+    def heading_content_start: (Integer id) -> Integer
+    def heading_content_len: (Integer id) -> Integer
     def list_ordered?: (Integer id) -> bool
     def list_start: (Integer id) -> Integer
     def list_tight?: (Integer id) -> bool
@@ -150,9 +152,12 @@ module RedQuilt
     def to_h: () -> { start_byte: Integer, end_byte: Integer }
   end
 
+  # Positions follow the unist Point convention: line and column are 1-based
+  # and counted in characters, while char_offset is 0-based.
   class SourceMap
     def initialize: (String source) -> void
     def line_column: (Integer byte_offset) -> { line: Integer, column: Integer }
+    def char_offset: (Integer byte_offset) -> Integer
   end
 
   class Diagnostic

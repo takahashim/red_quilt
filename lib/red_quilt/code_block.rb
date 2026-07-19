@@ -63,8 +63,14 @@ module RedQuilt
         indent_n = fence[:indent] || 0
         code = content_lines.map { |l| Indentation.strip_leading_spaces(l.content, indent_n) }.join("\n")
         code << "\n" unless content_lines.empty?
-        source_start = content_lines.empty? ? start_line.start_byte : content_lines.first.start_byte
-        source_end = content_lines.empty? ? start_line.end_byte : content_lines.last.end_byte
+        # The span covers the fences too, as cmark and mdast both report — a
+        # span of the content alone points a line below the block. Leading
+        # indent is excluded, so `  ```rb` starts at the backticks. `index`
+        # now sits past the closing fence, or past the last line when the
+        # fence was never closed, so lines[index - 1] is the block's last line
+        # either way.
+        source_start = start_line.start_byte + indent_n
+        source_end = lines[index - 1].end_byte
         code_id = @arena.add_node(NodeType::CODE_BLOCK,
                                   source_start: source_start,
                                   source_len: source_end - source_start,

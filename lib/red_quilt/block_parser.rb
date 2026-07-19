@@ -69,7 +69,11 @@ module RedQuilt
           append_heading(parent_id, line, heading, transformed)
           index += 1
         elsif thematic_break?(content)
-          @arena.append_child(parent_id, @arena.add_node(NodeType::THEMATIC_BREAK, source_start: line.start_byte, source_len: line.span_len))
+          break_start = line.start_byte + Indentation.leading_ws_bytes(content)
+          @arena.append_child(parent_id,
+                              @arena.add_node(NodeType::THEMATIC_BREAK,
+                                              source_start: break_start,
+                                              source_len: line.end_byte - break_start))
           index += 1
         elsif @footnotes && (footnote = FootnoteDefinition.match(content))
           index = @footnote_parser.parse(lines, index, footnote, @footnotes, @root_id)
@@ -188,11 +192,17 @@ module RedQuilt
 
     def append_heading(parent_id, line, heading, transformed)
       content = heading[:content].to_s.rstrip
-      source_start = line.start_byte + heading[:content_start]
+      # The span covers the heading as written — `#` marker, content, and any
+      # closing hashes — matching cmark sourcepos and mdast. Leading indent is
+      # excluded: `   # H1` starts at the `#`, not at the line start.
+      source_start = line.start_byte + heading[:marker_start].to_i
+      content_start = line.start_byte + heading[:content_start]
       node_id = @arena.add_node(NodeType::HEADING,
                                 source_start: source_start,
-                                source_len: content.bytesize,
+                                source_len: line.end_byte - source_start,
                                 int1: heading[:level],
+                                int2: content_start,
+                                int3: content.bytesize,
                                 str1: transformed ? content : nil)
       @arena.append_child(parent_id, node_id)
     end
@@ -201,6 +211,7 @@ module RedQuilt
       paragraph_lines = []
       start_index = index
       setext_level = nil
+      setext_underline = nil
       while index < lines.length
         line = lines[index]
         break if line.blank
@@ -212,6 +223,7 @@ module RedQuilt
         # thematic break.
         if paragraph_lines.any? && !line.lazy_continuation && (level = setext_underline_level(line.content))
           setext_level = level
+          setext_underline = line
           index += 1
           break
         end
@@ -246,13 +258,21 @@ module RedQuilt
       stripped[-1] = stripped[-1].sub(/[ \t]+\z/, "") if stripped.any?
       indent_was_stripped = stripped.zip(paragraph_lines).any? { |s, l| s.length != l.content.length }
       text = stripped.join("\n")
-      start_byte = paragraph_lines.first.start_byte
+      # Spans start at the first non-whitespace byte: leading indent is not
+      # part of the block as authored. Both cmark and mdast report `  text`
+      # as starting at column 3.
+      first_line = paragraph_lines.first
+      start_byte = first_line.start_byte + Indentation.leading_ws_bytes(first_line.content)
       end_byte = paragraph_lines.last.end_byte
 
       if setext_level
+        # The span runs through the `===` / `---` underline, which is part of
+        # the heading as authored — cmark and mdast both report it that way.
+        # The text is carried by str1, so widening the span does not leak the
+        # underline into the heading's content.
         heading_id = @arena.add_node(NodeType::HEADING,
                                      source_start: start_byte,
-                                     source_len: end_byte - start_byte,
+                                     source_len: setext_underline.end_byte - start_byte,
                                      int1: setext_level,
                                      str1: text.strip)
         @arena.append_child(parent_id, heading_id)
@@ -340,7 +360,10 @@ module RedQuilt
 
       content = match[2].to_s
       content_index = content.empty? ? text.length : (text.index(content) || text.bytesize)
-      { level: match[1].length, content: content, content_start: content_index }
+      # Offset of the `#` run itself. Only spaces may precede it (at most 3),
+      # so the character index doubles as a byte offset.
+      { level: match[1].length, content: content, content_start: content_index,
+        marker_start: match.begin(1) }
     end
 
     def store_reference(reference, source_span)

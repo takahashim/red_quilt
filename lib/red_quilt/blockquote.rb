@@ -17,6 +17,14 @@ module RedQuilt
       text.match?(BLOCKQUOTE_PREFIX_RE)
     end
 
+    # Byte offset of the `>` within the line, or nil when there is no prefix.
+    # Only spaces may precede it (at most 3), so the character index returned
+    # by the match doubles as a byte offset.
+    def marker_offset(text)
+      match = BLOCKQUOTE_PREFIX_RE.match(text)
+      match && (match.end(0) - 1)
+    end
+
     # Strip the leading `>` (and at most one column of whitespace after
     # it) from a blockquote line. Returns a new Line whose
     # content is the inner text. If the line has no `>` prefix, the
@@ -75,6 +83,11 @@ module RedQuilt
       end
 
       def parse(parent_id, lines, index)
+        # Captured before the loop: block_lines holds prefix-stripped lines,
+        # whose start_byte sits after the `>`. The span must start at the
+        # marker itself (excluding indent), as cmark and mdast both report.
+        first_line = lines[index]
+        source_start = first_line.start_byte + (Blockquote.marker_offset(first_line.content) || 0)
         block_lines = []
         paragraph_open = false
 
@@ -113,8 +126,8 @@ module RedQuilt
         end
 
         block_id = @arena.add_node(NodeType::BLOCKQUOTE,
-                                   source_start: block_lines.first.start_byte,
-                                   source_len: block_lines.last.end_byte - block_lines.first.start_byte)
+                                   source_start: source_start,
+                                   source_len: block_lines.last.end_byte - source_start)
         @arena.append_child(parent_id, block_id)
         @block_parser.parse_lines(block_id, block_lines, transformed: true)
         index

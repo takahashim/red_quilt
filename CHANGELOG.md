@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: source positions now follow the unist Point convention**, which
+  cmark sourcepos and mdast both use. Three related changes:
+  - `source_location` columns are 1-based (they were 0-based; lines were
+    already 1-based). Both are counted in characters, and `end` remains
+    exclusive.
+  - Block spans cover the block as authored rather than its content alone.
+    `# H1` now starts at the `#`, `> quote` at the `>`, a list item at its
+    bullet, a fenced code block includes both fences, and a setext heading
+    includes its `===` / `---` underline.
+  - Leading indent is excluded from block spans, so `  text` starts at
+    column 3 rather than column 1. This applies to ATX and setext headings,
+    paragraphs, blockquotes, fenced code blocks, lists, list items, and
+    thematic breaks.
+  - The fenced code block change also fixes a wrong *line* number: the span
+    used to start at the first content line, reporting the block one line
+    below its opening fence.
+
+  Every expected value was verified against commonmark.js and
+  mdast-util-from-markdown; RedQuilt now agrees with mdast on all of them
+  except an unclosed fence, where the two references disagree and RedQuilt
+  follows cmark. Callers that added 1 to columns, or that relied on a
+  heading span excluding `# `, need updating.
+
+  `NodeRef#text` is unaffected: a heading's text remains its content, without
+  the marker.
+
 - Lowered the minimum supported Ruby from 3.3 to 3.1. The only 3.1
   incompatibility was `String#byteindex` (added in Ruby 3.2), used in two
   inline hot paths; both operate on a binary (`String#b`) view of the source,
@@ -18,6 +44,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   development gem versions that do not exist for the others (e.g. `rdoc 8.0.0`
   and `rbs 4.0.3` have no Ruby 3.1 release), so a single committed lockfile
   cannot serve the supported range. Each Ruby now resolves its own.
+
+### Fixed
+
+- `source_location` reported wrong line numbers for any source containing a
+  multibyte character. The line-start table is indexed by byte offset, but it
+  was built with `String#index`, which counts characters, so every line after
+  the first multibyte character drifted. Existing multibyte coverage did not
+  catch this because it used single-line sources.
+- `Renderer::MDAST` emitted positions that violated the unist spec: `column`
+  was 0-based where unist requires 1-based, and `offset` was a byte index
+  where unist requires a 0-based character index. The latter made every
+  offset after a multibyte character wrong.
 
 ### Added
 

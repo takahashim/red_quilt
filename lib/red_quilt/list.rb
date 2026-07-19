@@ -146,15 +146,19 @@ module RedQuilt
 
       def parse(parent_id, lines, index)
         first_match = List.match(lines[index].content)
+        # Leading indent is excluded, so `  - item` starts at the bullet.
+        list_start_byte = lines[index].start_byte + Indentation.leading_ws_bytes(lines[index].content)
         list_id = @arena.add_node(NodeType::LIST,
-                                  source_start: lines[index].start_byte,
+                                  source_start: list_start_byte,
                                   source_len: 0,
                                   int1: first_match[:ordered] ? 1 : 0,
                                   int2: first_match[:start_number],
                                   int3: 1,
                                   str1: first_match[:marker])
         @arena.append_child(parent_id, list_id)
-        start_byte = lines[index].start_byte
+        # update_span below rewrites the span once the list's extent is
+        # known, so it has to carry the indent-stripped start too.
+        start_byte = list_start_byte
         end_byte = lines[index].end_byte
         loose = false
 
@@ -167,11 +171,16 @@ module RedQuilt
           break unless match
           break unless List.same_group?(first_match, match)
 
+          # collect_item strips the bullet, so item_lines start at the item's
+          # content. The span starts at the marker instead — an item is
+          # authored as "- text", not "text".
+          marker_line = lines[index]
+          item_start = marker_line.start_byte + Indentation.leading_ws_bytes(marker_line.content)
           item_lines, index = collect_item(lines, index, match)
           end_byte = item_lines.last.end_byte
           item_id = @arena.add_node(NodeType::LIST_ITEM,
-                                    source_start: item_lines.first.start_byte,
-                                    source_len: item_lines.last.end_byte - item_lines.first.start_byte)
+                                    source_start: item_start,
+                                    source_len: item_lines.last.end_byte - item_start)
           @arena.append_child(list_id, item_id)
           # CommonMark: an item is loose when "two block-level elements
           # with a blank line between them" appear at its top level.

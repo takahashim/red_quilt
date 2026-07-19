@@ -98,7 +98,8 @@ RSpec.describe RedQuilt do
       heading = doc.root.children.first
 
       expect(heading.text).to eq("Hello")
-      expect(heading.source_span).to eq(RedQuilt::SourceSpan.new(2, 7))
+      # The span covers the heading as authored, including the "# " marker.
+      expect(heading.source_span).to eq(RedQuilt::SourceSpan.new(0, 7))
     end
 
     it "tracks source spans for inline nodes parsed from source-backed content" do
@@ -127,7 +128,7 @@ RSpec.describe RedQuilt do
         children: [
           {
             type: :heading,
-            source_span: RedQuilt::SourceSpan.new(2, 15),
+            source_span: RedQuilt::SourceSpan.new(0, 15),
             attributes: { level: 1, text: "Hello world" },
             children: [
               {
@@ -180,7 +181,7 @@ RSpec.describe RedQuilt do
 
       expect(heading.to_h).to eq({
         type: :heading,
-        source_span: RedQuilt::SourceSpan.new(2, 15),
+        source_span: RedQuilt::SourceSpan.new(0, 15),
         attributes: { level: 1, text: "Hello world" },
         children: [
           {
@@ -533,17 +534,18 @@ RSpec.describe RedQuilt do
       doc = described_class.parse(source)
 
       heading = doc.root.children.first
-      # heading source_span is the inline part ("Title"), not including "# "
+      # Lines and columns are both 1-based (unist / cmark convention), and the
+      # heading span covers "# Title" including the marker.
       expect(heading.source_location).to eq({
-        start_line: 1, start_column: 2,
-        end_line: 1, end_column: 7,
+        start_line: 1, start_column: 1,
+        end_line: 1, end_column: 8,
       })
 
       paragraph = doc.root.children.last
       # paragraph spans from "Body" to end of "newline"
       expect(paragraph.source_location).to eq({
-        start_line: 3, start_column: 0,
-        end_line: 4, end_column: 12,
+        start_line: 3, start_column: 1,
+        end_line: 4, end_column: 13,
       })
     end
 
@@ -568,8 +570,8 @@ RSpec.describe RedQuilt do
     end
 
     it "reports source_location columns in characters, not bytes" do
-      # "日本語" is 3 characters (9 bytes in UTF-8).
-      # "**強調**" starts at character column 3 (byte 9).
+      # "日本語" is 3 characters (9 bytes in UTF-8), so with 1-based columns
+      # "**強調**" starts at character column 4 (byte 9).
       source = "日本語**強調**テスト"
       doc = described_class.parse(source)
 
@@ -578,9 +580,9 @@ RSpec.describe RedQuilt do
 
       loc = strong.source_location
       expect(loc[:start_line]).to eq(1)
-      expect(loc[:start_column]).to eq(3)
-      # "**強調**" is 6 characters, so end_column should be 3 + 6 = 9
-      expect(loc[:end_column]).to eq(9)
+      expect(loc[:start_column]).to eq(4)
+      # "**強調**" is 6 characters, so end_column should be 4 + 6 = 10
+      expect(loc[:end_column]).to eq(10)
     end
 
     it "sanitizes unsafe URL schemes" do
