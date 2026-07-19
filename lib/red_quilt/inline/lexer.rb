@@ -22,8 +22,8 @@ module RedQuilt
         [0x2A, 0x5F, 0x60, 0x5B, 0x5D, 0x21, 0x3C, 0x26, 0x5C, 0x0A, 0x7E].each { |b| a[b] = true }
         a.freeze
       end
-      # Same set as SPECIAL_BYTES, for String#byteindex to jump over long
-      # plain-text runs at C speed.
+      # Same set as SPECIAL_BYTES, for String#index on the binary view to
+      # jump over long plain-text runs at C speed.
       SPECIAL_BYTE_RE = /[*_`\[\]!<&\\\n~]/
 
       # Anchored regexes for StringScanner#scan (still used by
@@ -116,12 +116,12 @@ module RedQuilt
             pos = @ss.pos
           else
             # Inlined scan_text. Always make progress: consume the
-            # current byte, then byteindex against the binary view to
+            # current byte, then index against the binary view to
             # leap to the next special byte at C speed.
             start = pos
             pos += 1
             if pos < end_pos
-              next_special = @source_b.byteindex(SPECIAL_BYTE_RE, pos)
+              next_special = @source_b.index(SPECIAL_BYTE_RE, pos)
               pos = next_special.nil? || next_special >= end_pos ? end_pos : next_special
             end
             tokens.emit(TokenKind::TEXT, start_byte: start, end_byte: pos)

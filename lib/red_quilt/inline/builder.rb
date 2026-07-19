@@ -27,10 +27,10 @@ module RedQuilt
       def initialize(arena, source, references, track_source: true, diagnostics: nil, footnotes: nil)
         @arena = arena
         @source = source
-        # Binary view of the source for String#byteindex hot paths:
-        # byteindex on a UTF-8 string raises when the byte offset falls
-        # inside a multibyte sequence; the binary view treats every byte
-        # as its own character.
+        # Binary view of the source for String#index hot paths: on a
+        # UTF-8 string, index counts characters, so the offsets would not
+        # line up with our byte positions. The binary view treats every
+        # byte as its own character, making index a byte-offset search.
         @source_b = source.b
         @references = references
         @track_source = track_source
@@ -229,14 +229,14 @@ module RedQuilt
       # source bytes directly. CommonMark: backslash escapes do not
       # apply inside a code span, so once we're past the opener every
       # backtick run is a real candidate (token-level ESCAPED_CHAR is
-      # ignored). byteindex jumps over non-backtick byte stretches at
-      # C speed.
+      # ignored). index on the binary view jumps over non-backtick byte
+      # stretches at C speed.
       def resolve_code_span(opener_id)
         run_len = @tokens.int1(opener_id)
         pos = @tokens.end_byte(opener_id)
         bytesize = @source_b.bytesize
         while pos < bytesize
-          run_start = @source_b.byteindex(BACKTICK_BYTE, pos)
+          run_start = @source_b.index(BACKTICK_BYTE, pos)
           break if run_start.nil?
 
           pos = run_start + 1

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Lowered the minimum supported Ruby from 3.3 to 3.1. The only 3.1
+  incompatibility was `String#byteindex` (added in Ruby 3.2), used in two
+  inline hot paths; both operate on a binary (`String#b`) view of the source,
+  where `String#index` returns the same byte offsets. CI now runs the test
+  suite on 3.1 through 4.0.
+- `Gemfile.lock` is no longer committed. A lockfile resolved on one Ruby pins
+  development gem versions that do not exist for the others (e.g. `rdoc 8.0.0`
+  and `rbs 4.0.3` have no Ruby 3.1 release), so a single committed lockfile
+  cannot serve the supported range. Each Ruby now resolves its own.
+
 ### Added
 
 - `NodeRef#info`: returns the fence info string of a code block (e.g. `ruby`

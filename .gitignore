@@ -1,4 +1,8 @@
 /.bundle/
+# This gem supports Ruby 3.1 through 4.0, and a lockfile resolved on one of
+# them pins gem versions that do not exist for the others. Bundler recommends
+# gems not commit a lockfile; each Ruby resolves its own.
+/Gemfile.lock
 /.yardoc
 /_yardoc/
 /coverage/
