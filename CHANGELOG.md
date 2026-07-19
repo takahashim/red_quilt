@@ -79,9 +79,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   there returns another field's value rather than nil (`Arena#link_destination`
   on a paragraph returns the paragraph's text).
 
+## [0.8.0] - 2026-06-24
+
+### Added
+
 - `NodeRef#info`: returns the fence info string of a code block (e.g. `ruby`
-  in ` ```ruby `, or `vtt audio="x.mp3"`); `""` for code blocks written
-  without one. The raw code content remains available via `NodeRef#text`.
+  in ` ```ruby `, or `vtt audio="x.mp3"`); `""` for code blocks without one
+  and for every other node type. The raw code content remains available via
+  `NodeRef#text`.
 - `Renderer::HTML#render_fragment(nodes)`: renders an Array of `NodeRef` in
   order and returns the HTML fragment without affecting the main render
   output. Renderer state shared across nodes (e.g. the heading-id slugger) is
