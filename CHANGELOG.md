@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NodeRef#text` is unaffected: a heading's text remains its content, without
   the marker.
 
+- **Breaking: `NodeRef#info` returns nil for nodes that are not code
+  blocks**, where 0.8.0 returned `""`. A code block written without an info
+  string still returns `""`, so the two cases are now distinguishable. This
+  matches the new attribute accessors, which all use nil for "this node's
+  type does not carry the attribute".
 - Lowered the minimum supported Ruby from 3.3 to 3.1. The only 3.1
   incompatibility was `String#byteindex` (added in Ruby 3.2), used in two
   inline hot paths; both operate on a binary (`String#b`) view of the source,
@@ -59,10 +64,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Node attribute accessors on `NodeRef`: `heading_level`, `list_ordered?`,
+  `list_start`, `list_tight?`, `list_delimiter`, `link_destination`,
+  `link_title`, `footnote_label`, `footnote_number`, and `header?`. Each
+  returns nil when the node's type does not carry the attribute, so callers
+  can walk a document branching on `#type` and read that type's fields
+  directly. Previously the only public route was `#to_h`, which builds a Hash
+  for the whole subtree — 5391 objects for a 257-node list where these
+  accessors allocate none.
+
+  These wrappers are the safe way to read attributes. The `Arena` accessors
+  they delegate to are the raw layer and skip the type check, and several
+  attributes share a storage column, so reading one off a mismatched node
+  there returns another field's value rather than nil (`Arena#link_destination`
+  on a paragraph returns the paragraph's text).
+
 - `NodeRef#info`: returns the fence info string of a code block (e.g. `ruby`
-  in ` ```ruby `, or `vtt audio="x.mp3"`); `""` for code blocks without one
-  and for every other node type. The raw code content remains available via
-  `NodeRef#text`.
+  in ` ```ruby `, or `vtt audio="x.mp3"`); `""` for code blocks written
+  without one. The raw code content remains available via `NodeRef#text`.
 - `Renderer::HTML#render_fragment(nodes)`: renders an Array of `NodeRef` in
   order and returns the HTML fragment without affecting the main render
   output. Renderer state shared across nodes (e.g. the heading-id slugger) is

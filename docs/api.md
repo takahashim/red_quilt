@@ -50,7 +50,22 @@ node.children         # Array[NodeRef]
 node.walk             # Enumerator[NodeRef] or { |node| ... } block
 node.find_all(:link)  # Array[NodeRef] with matching type
 node.text             # String (concatenated child text)
-node.info             # String fence info of a code block (e.g. "ruby")
+
+# Node attributes, by type. Each returns nil when the node's type does not
+# carry the attribute, so you can branch on #type and read that type's own
+# fields without building a Hash per node.
+node.info             # CODE_BLOCK: fence info, e.g. "ruby". "" when the
+                      # block was written without one.
+node.heading_level    # HEADING: 1..6
+node.list_ordered?    # LIST: true for "1.", false for "-"
+node.list_start       # LIST: start number of an ordered list
+node.list_tight?      # LIST: tight vs loose
+node.list_delimiter   # LIST: delimiter as authored, e.g. "-" or "."
+node.link_destination # LINK / IMAGE: destination URL
+node.link_title       # LINK / IMAGE: title, nil when absent
+node.footnote_label   # FOOTNOTE_DEFINITION / FOOTNOTE_REFERENCE: label
+node.footnote_number  # FOOTNOTE_DEFINITION / FOOTNOTE_REFERENCE: 1-based
+node.header?          # TABLE_ROW / TABLE_CELL: part of the header row?
 
 # Position information (byte offset)
 node.source_span      # SourceSpan with start_byte, end_byte

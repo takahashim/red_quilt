@@ -46,11 +46,81 @@ module RedQuilt
       text
     end
 
-    # Returns the fence info string of a CODE_BLOCK node.
+    # Node attributes, by NodeType.
+    #
+    # Each returns nil when the node does not carry the attribute, so callers
+    # can walk the tree branching on #type and read the type's own fields
+    # without a Hash allocation per node. The Arena's accessors are the raw
+    # layer and deliberately skip that check: several attributes share a
+    # storage column, so reading one off a mismatched node yields another
+    # field's value rather than nil (e.g. Arena#link_destination on a
+    # paragraph returns the paragraph's text). These wrappers are the safe
+    # way to read attributes.
+
+    # CODE_BLOCK: the fence info string, e.g. "ruby" or 'vtt audio="x.mp3"'.
+    # A code block written without one has an empty info string, so "" means
+    # "no info given" while nil means "not a code block".
     def info
-      return "" unless @arena.type(@node_id) == NodeType::CODE_BLOCK
+      return nil unless type?(NodeType::CODE_BLOCK)
 
       @arena.code_block_info(@node_id).to_s
+    end
+
+    # HEADING: nesting level (1..6).
+    def heading_level
+      @arena.heading_level(@node_id) if type?(NodeType::HEADING)
+    end
+
+    # LIST: ordered (`1.`) vs bullet (`-`).
+    def list_ordered?
+      @arena.list_ordered?(@node_id) if type?(NodeType::LIST)
+    end
+
+    # LIST: start number of an ordered list.
+    def list_start
+      @arena.list_start(@node_id) if type?(NodeType::LIST)
+    end
+
+    # LIST: tight (no blank lines between items) vs loose.
+    def list_tight?
+      @arena.list_tight?(@node_id) if type?(NodeType::LIST)
+    end
+
+    # LIST: the item delimiter as authored, e.g. "-" or "1.".
+    def list_delimiter
+      @arena.list_delimiter(@node_id) if type?(NodeType::LIST)
+    end
+
+    # LINK / IMAGE: the destination URL.
+    def link_destination
+      @arena.link_destination(@node_id) if link_like?
+    end
+
+    # LINK / IMAGE: the optional title, nil when absent.
+    def link_title
+      @arena.link_title(@node_id) if link_like?
+    end
+
+    # FOOTNOTE_DEFINITION / FOOTNOTE_REFERENCE: the label as authored.
+    def footnote_label
+      @arena.footnote_label(@node_id) if footnote_like?
+    end
+
+    # FOOTNOTE_DEFINITION / FOOTNOTE_REFERENCE: the resolved 1-based number.
+    def footnote_number
+      @arena.footnote_number(@node_id) if footnote_like?
+    end
+
+    # TABLE_ROW / TABLE_CELL: whether this belongs to the header row.
+    #
+    # nil rather than false outside a table, matching the other attribute
+    # accessors: a paragraph is not a non-header row, it has no header-ness
+    # at all. Both answers are falsy, so `if node.header?` reads the same.
+    def header?
+      return @arena.table_row_header?(@node_id) if type?(NodeType::TABLE_ROW)
+      return @arena.table_cell_header?(@node_id) if type?(NodeType::TABLE_CELL)
+
+      nil # rubocop:disable Style/ReturnNilInPredicateMethodDefinition
     end
 
     def source_span
@@ -89,6 +159,22 @@ module RedQuilt
     end
 
     private
+
+    def type?(node_type)
+      @arena.type(@node_id) == node_type
+    end
+
+    # Kept allocation-free (no splat) because these accessors are meant for
+    # per-node use while walking a whole document.
+    def link_like?
+      node_type = @arena.type(@node_id)
+      node_type == NodeType::LINK || node_type == NodeType::IMAGE
+    end
+
+    def footnote_like?
+      node_type = @arena.type(@node_id)
+      node_type == NodeType::FOOTNOTE_DEFINITION || node_type == NodeType::FOOTNOTE_REFERENCE
+    end
 
     def ast_attributes
       case @arena.type(@node_id)

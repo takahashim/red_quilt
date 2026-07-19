@@ -61,11 +61,23 @@ module RedQuilt
     def walk: () { (NodeRef) -> void } -> void
             | () -> Enumerator[NodeRef, void]
     def text: () -> String?
-    def info: () -> String
     def source_span: () -> SourceSpan?
     def find_all: (Symbol type) -> Array[NodeRef]
     def source_location: () -> { start_line: Integer, start_column: Integer, end_line: Integer, end_column: Integer }?
     def to_h: () -> Hash[Symbol, untyped]
+
+    # Node attributes: nil when the node's type does not carry the attribute.
+    def info: () -> String?
+    def heading_level: () -> Integer?
+    def list_ordered?: () -> bool?
+    def list_start: () -> Integer?
+    def list_tight?: () -> bool?
+    def list_delimiter: () -> String?
+    def link_destination: () -> String?
+    def link_title: () -> String?
+    def footnote_label: () -> String?
+    def footnote_number: () -> Integer?
+    def header?: () -> bool?
   end
 
   # Low-level parallel-array storage for the AST. See docs/arena-usage.ja.md.
